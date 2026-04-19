@@ -3,9 +3,11 @@ import { useTaskStore } from "../store/taskStore";
 import { Toolbar } from "./Toolbar";
 import { JsonPreview } from "./JsonPreview";
 import { ImportDropZone } from "./ImportDropZone";
+import { ValidationBanner } from "./ValidationBanner";
 import { MetadataPanel } from "./sections/MetadataPanel";
 import { ThemePanel } from "./sections/ThemePanel";
 import { AssetsPanel } from "./sections/AssetsPanel";
+import { ValidationPanel } from "./sections/ValidationPanel";
 import { EmptyStub } from "./sections/EmptyStub";
 
 type Section =
@@ -18,7 +20,8 @@ type Section =
   | "trial_template"
   | "timing"
   | "blocks"
-  | "session_end";
+  | "session_end"
+  | "validation";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string; batch: number }> = [
   { id: "metadata",        label: "Metadata",       batch: 2 },
@@ -31,6 +34,7 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string; batch: number }> = [
   { id: "timing",          label: "Timing",         batch: 6 },
   { id: "blocks",          label: "Blocks",         batch: 6 },
   { id: "session_end",     label: "Session end",    batch: 6 },
+  { id: "validation",      label: "Validation",     batch: 3 },
 ];
 
 export function Shell() {
@@ -70,6 +74,7 @@ export function Shell() {
           ))}
         </nav>
         <main className="flex-1 overflow-auto p-6">
+          <ValidationBanner onOpen={() => setActive("validation")} />
           <SectionBody active={active} />
         </main>
         {previewOpen && (
@@ -94,6 +99,7 @@ function SectionBody({ active }: { active: Section }) {
     case "timing":         return <EmptyStub label="Timing"         batch={6} />;
     case "blocks":         return <EmptyStub label="Blocks"         batch={6} />;
     case "session_end":    return <EmptyStub label="Session end"    batch={6} />;
+    case "validation":     return <ValidationPanel />;
   }
 }
 

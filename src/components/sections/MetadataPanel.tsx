@@ -2,21 +2,21 @@ import { useTaskStore } from "../../store/taskStore";
 import { TextField, NumberField, Toggle } from "../primitives";
 import { setMetadata } from "../../actions/metadata";
 import { SectionHeader } from "./SectionHeader";
+import { useIssuesAt } from "../../validator/hooks";
 import type { TargetDevice } from "../../types/task";
 
 const TARGET_DEVICES: readonly TargetDevice[] = ["desktop", "tablet", "phone"];
 
-const ID_PATTERN = /^[a-z0-9_]+$/;
-
 export function MetadataPanel() {
   const task = useTaskStore((s) => s.task);
   const update = useTaskStore((s) => s.updateTask);
+  const taskIdIssues = useIssuesAt("metadata.task_id");
+  const taskVersionIssues = useIssuesAt("metadata.task_version");
   if (!task) return null;
   const m = task.metadata;
 
-  const idError = m.task_id && !ID_PATTERN.test(m.task_id)
-    ? "Must match ^[a-z0-9_]+$ — lowercase, digits, underscore."
-    : undefined;
+  const idError = taskIdIssues[0]?.message;
+  const versionError = taskVersionIssues[0]?.message;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -36,6 +36,7 @@ export function MetadataPanel() {
           onChange={(v) => update((t) => setMetadata(t, "task_version", v))}
           required
           help="Free-form, conventionally semver"
+          error={versionError}
         />
         <TextField
           label="Name"

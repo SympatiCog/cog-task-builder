@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { KeyedList, Select, TextField, Toggle } from "../primitives";
 import { SectionHeader } from "./SectionHeader";
+import { useIssuesAt } from "../../validator/hooks";
 import {
   addAudio,
   addImage,
@@ -19,7 +20,6 @@ import {
 } from "../../actions/assets";
 import type { AudioAsset, ImageAsset } from "../../types/task";
 
-const ID_PATTERN = /^[a-z0-9_]+$/;
 
 export function AssetsPanel() {
   const task = useTaskStore((s) => s.task);
@@ -78,7 +78,7 @@ export function AssetsPanel() {
           onDelete={(id) => update((t) => deleteImage(t, id))}
           renderRow={(id, asset) => (
             <>
-              <IdValidity id={id} />
+              <IdValidity path={`assets.images.${id}`} />
               <AssetEditor
                 asset={asset}
                 onChange={(next) => update((t) => setImage(t, id, next as ImageAsset))}
@@ -108,7 +108,7 @@ export function AssetsPanel() {
           onDelete={(id) => update((t) => deleteAudio(t, id))}
           renderRow={(id, asset) => (
             <>
-              <IdValidity id={id} />
+              <IdValidity path={`assets.audio.${id}`} />
               <AssetEditor
                 asset={asset}
                 onChange={(next) => update((t) => setAudio(t, id, next as AudioAsset))}
@@ -138,7 +138,7 @@ export function AssetsPanel() {
           onDelete={(name) => update((t) => deletePool(t, name))}
           renderRow={(name, pool) => (
             <>
-              <IdValidity id={name} />
+              <IdValidity path={`assets.pools.${name}`} />
               <div className="flex flex-col gap-3">
                 <Toggle
                   label="Share queue across stimulus types"
@@ -164,12 +164,12 @@ export function AssetsPanel() {
   );
 }
 
-function IdValidity({ id }: { id: string }) {
-  if (ID_PATTERN.test(id)) return null;
+function IdValidity({ path }: { path: string }) {
+  const issues = useIssuesAt(path);
+  const invalid = issues.find((i) => i.code === "invalid_identifier");
+  if (!invalid) return null;
   return (
-    <p role="alert" className="mb-2 text-xs text-rose-600">
-      Id must match ^[a-z0-9_]+$ — lowercase, digits, underscore.
-    </p>
+    <p role="alert" className="mb-2 text-xs text-rose-600">{invalid.message}</p>
   );
 }
 
