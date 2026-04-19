@@ -9,9 +9,12 @@ export interface ImportResult {
 // Parse a JSON string into a TaskJson. v1 only does shape-level guards; deep
 // schema validation is a later batch.
 export function importTask(text: string): ImportResult {
+  // Strip UTF-8 BOM — some editors (Notepad, older Excel exports) prepend
+  // U+FEFF which JSON.parse rejects.
+  const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(clean);
   } catch (e) {
     return { ok: false, error: `Invalid JSON: ${(e as Error).message}` };
   }

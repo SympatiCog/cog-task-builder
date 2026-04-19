@@ -12,13 +12,16 @@ export function Toolbar() {
   const reset = useTaskStore((s) => s.reset);
 
   const handleFile = async (file: File) => {
-    const text = await file.text();
-    const result = importTask(text);
-    if (result.ok && result.task) {
-      loadTask(result.task);
-    } else {
-      setError(result.error ?? "Import failed.");
+    let text: string;
+    try {
+      text = await file.text();
+    } catch (e) {
+      setError(`Could not read file: ${(e as Error).message}`);
+      return;
     }
+    const result = importTask(text);
+    if (result.ok && result.task) loadTask(result.task);
+    else setError(result.error ?? "Import failed.");
   };
 
   const handleExport = () => {
@@ -32,7 +35,14 @@ export function Toolbar() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Defer revoke so Firefox/Safari have time to start the download before
+    // the URL becomes invalid.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const handleReset = () => {
+    if (task && !window.confirm("Discard the current draft? This cannot be undone.")) return;
+    reset();
   };
 
   return (
@@ -68,7 +78,7 @@ export function Toolbar() {
       <button
         type="button"
         className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-40"
-        onClick={reset}
+        onClick={handleReset}
         disabled={!task && !error}
       >
         Reset
