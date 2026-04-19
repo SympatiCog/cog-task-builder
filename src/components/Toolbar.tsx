@@ -1,13 +1,21 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useTaskStore } from "../store/taskStore";
 import { importTask } from "../serde/import";
 import { exportTask } from "../serde/export";
+import { PasteImportDialog } from "./PasteImportDialog";
 
-export function Toolbar() {
+interface ToolbarProps {
+  onTogglePreview?: () => void;
+  previewOpen?: boolean;
+}
+
+export function Toolbar({ onTogglePreview, previewOpen }: ToolbarProps = {}) {
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const task = useTaskStore((s) => s.task);
   const error = useTaskStore((s) => s.error);
   const loadTask = useTaskStore((s) => s.loadTask);
+  const loadNew = useTaskStore((s) => s.newTask);
   const setError = useTaskStore((s) => s.setError);
   const reset = useTaskStore((s) => s.reset);
 
@@ -35,8 +43,6 @@ export function Toolbar() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    // Defer revoke so Firefox/Safari have time to start the download before
-    // the URL becomes invalid.
     setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
@@ -46,43 +52,73 @@ export function Toolbar() {
   };
 
   return (
-    <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
-      <h1 className="text-lg font-semibold text-slate-800">Cog Task Builder</h1>
-      <div className="flex-1" />
-      <button
-        type="button"
-        className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
-        onClick={() => fileInput.current?.click()}
-      >
-        Import JSON
-      </button>
-      <input
-        ref={fileInput}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleFile(f);
-          e.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
-        onClick={handleExport}
-        disabled={!task}
-      >
-        Export JSON
-      </button>
-      <button
-        type="button"
-        className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-40"
-        onClick={handleReset}
-        disabled={!task && !error}
-      >
-        Reset
-      </button>
-    </div>
+    <>
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3">
+        <h1 className="text-lg font-semibold text-slate-800">Cog Task Builder</h1>
+        <div className="flex-1" />
+        <button
+          type="button"
+          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          onClick={() => {
+            if (task && !window.confirm("Discard the current draft and start a blank task?")) return;
+            loadNew();
+          }}
+        >
+          New
+        </button>
+        <button
+          type="button"
+          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          onClick={() => fileInput.current?.click()}
+        >
+          Import file
+        </button>
+        <button
+          type="button"
+          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          onClick={() => setPasteOpen(true)}
+        >
+          Paste JSON
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+            e.target.value = "";
+          }}
+        />
+        {onTogglePreview && (
+          <button
+            type="button"
+            aria-pressed={previewOpen}
+            className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 aria-[pressed=true]:bg-slate-800 aria-[pressed=true]:text-white"
+            onClick={onTogglePreview}
+          >
+            Preview
+          </button>
+        )}
+        <button
+          type="button"
+          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          onClick={handleExport}
+          disabled={!task}
+        >
+          Export
+        </button>
+        <button
+          type="button"
+          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-40"
+          onClick={handleReset}
+          disabled={!task && !error}
+        >
+          Reset
+        </button>
+      </div>
+      {pasteOpen && <PasteImportDialog onClose={() => setPasteOpen(false)} />}
+    </>
   );
 }
