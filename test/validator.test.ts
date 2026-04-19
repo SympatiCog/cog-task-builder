@@ -207,4 +207,118 @@ describe("validator: targeted error codes", () => {
     t.assets.pools = { p: { kind: "image", members: ["i1", "i1"] } };
     expect(validate(t).warnings.some((w) => w.code === "pool_member_duplicated")).toBe(true);
   });
+
+  it("empty_types on factorial_random block", () => {
+    const t = base();
+    t.blocks[0] = {
+      id: "main",
+      n_trials: 2,
+      types: [],
+      ordering: "factorial_random",
+    };
+    expect(validate(t).errors.some((e) => e.code === "empty_types")).toBe(true);
+  });
+
+  it("empty_types on fixed block", () => {
+    const t = base();
+    t.blocks[0] = { id: "main", n_trials: 2, types: [], ordering: "fixed" };
+    expect(validate(t).errors.some((e) => e.code === "empty_types")).toBe(true);
+  });
+
+  it("empty_types allows inline/csv (trial_list supplies trials)", () => {
+    const t = base();
+    t.blocks[0] = {
+      id: "main",
+      ordering: "inline",
+      trial_list: [{ type: "left" }, { type: "left" }],
+    };
+    expect(validate(t).errors.some((e) => e.code === "empty_types")).toBe(false);
+  });
+
+  it("asset_missing when base lacks asset and a used type doesn't override", () => {
+    const t = base();
+    // Template item has no asset; stimulus_type 'left' doesn't override.
+    t.trial_template = [
+      { id: "cs", kind: "image", onset_ms: 0, duration_ms: 0, captures_response: true },
+    ];
+    t.stimulus_types.left = { correct_response: "left", items: {} };
+    t.blocks[0] = { id: "main", n_trials: 2, types: ["left"], ordering: "fixed" };
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "asset_missing")).toBe(true);
+  });
+
+  it("asset_missing is silent when every used type overrides", () => {
+    const t = base();
+    t.assets.images = { im: { source: "bundled", path: "res://x.png" } };
+    t.trial_template = [
+      { id: "cs", kind: "image", captures_response: true },
+    ];
+    t.stimulus_types = {
+      L: { correct_response: "left", items: { cs: { asset: "img:im" } } },
+      R: { correct_response: "left", items: { cs: { asset: "img:im" } } },
+    };
+    t.responses = { left: { keyboard: ["f"] } };
+    t.blocks[0] = {
+      id: "main", n_trials: 4, types: ["L", "R"], ordering: "factorial_random",
+      constraints: { balanced: true },
+    };
+    expect(validate(t).errors.some((e) => e.code === "asset_missing")).toBe(false);
+  });
+
+  it("asset_missing is silent for feedback / blank items with no asset", () => {
+    const t = base();
+    t.trial_template = [
+      { id: "cs", kind: "text", asset: "txt:+", captures_response: true },
+      { id: "fb", kind: "feedback", anchor: "cs.end" },
+      { id: "gap", kind: "blank", anchor: "cs.end", onset_ms: 100, duration_ms: 100 },
+    ];
+    expect(validate(t).errors.some((e) => e.code === "asset_missing")).toBe(false);
+  });
+
+  // Regression: shape of the "broken" task the user submitted on 2026-04-19,
+  // which passed pre-fix validation. Block types was [] and slota_left had an
+  // empty items map while the base cs item had no asset. Both classes of bug
+  // should light up as errors now.
+  it("broken_empty_types regression: empty block.types AND asset_missing", () => {
+    const t = base();
+    t.trial_template = [
+      { id: "cs", kind: "image", captures_response: true },
+    ];
+    t.stimulus_types = {
+      slota_left: { correct_response: "left", items: {} },
+      slota_right: { correct_response: "left", items: { cs: { asset: "img:pool:slota_right" } } },
+    };
+    t.assets.images = { a: { source: "bundled", path: "res://a.png" } };
+    t.assets.pools = { slota_right: { kind: "image", members: ["a"] } };
+    t.blocks[0] = {
+      id: "main", n_trials: 12, types: [], ordering: "factorial_random",
+      constraints: { balanced: true },
+    };
+    const codes = validate(t).errors.map((e) => e.code);
+    expect(codes).toContain("empty_types");
+    // asset_missing only fires for TYPES THE BLOCK USES; empty types[] means
+    // no types are "used", so asset_missing is silent. Once the user fixes
+    // empty_types by adding ["slota_left", "slota_right"], asset_missing
+    // should fire on the next run — covered by the next test.
+  });
+
+  it("broken task once types are populated: asset_missing lights up for slota_left", () => {
+    const t = base();
+    t.trial_template = [
+      { id: "cs", kind: "image", captures_response: true },
+    ];
+    t.stimulus_types = {
+      slota_left: { correct_response: "left", items: {} },
+      slota_right: { correct_response: "left", items: { cs: { asset: "img:pool:slota_right" } } },
+    };
+    t.assets.images = { a: { source: "bundled", path: "res://a.png" } };
+    t.assets.pools = { slota_right: { kind: "image", members: ["a"] } };
+    t.blocks[0] = {
+      id: "main", n_trials: 12, types: ["slota_left", "slota_right"], ordering: "factorial_random",
+      constraints: { balanced: true },
+    };
+    const errs = validate(t).errors;
+    expect(errs.some((e) => e.code === "asset_missing" && e.message.includes("slota_left"))).toBe(true);
+    expect(errs.some((e) => e.code === "asset_missing" && e.message.includes("slota_right"))).toBe(false);
+  });
 });

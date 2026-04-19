@@ -39,6 +39,7 @@ export function validate(task: TaskJson | null | undefined): ValidationReport {
   checkAnchors(task, r);
   checkTiming(task, r);
   checkBlocks(task, r);
+  checkAssetCoverage(task, r);
   checkPoolSizeBounds(task, r);
   return r;
 }
@@ -534,6 +535,14 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
         }
       });
     }
+    // factorial_random and fixed draw trials from `types`; an empty list
+    // means the block has no stimulus material to produce trials from.
+    // inline and csv mode get trials from trial_list / trial_list_url and
+    // may legitimately have `types` empty.
+    if ((b.ordering === "factorial_random" || b.ordering === "fixed") &&
+        (!Array.isArray(b.types) || b.types.length === 0)) {
+      err(r, `${path}.types`, "empty_types", `${b.ordering} ordering requires at least one stimulus_type in types[].`);
+    }
     if (b.ordering === "factorial_random" && b.constraints?.balanced === true) {
       const n = b.n_trials ?? 0;
       const k = (b.types ?? []).length;
@@ -543,6 +552,49 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
     }
     if (b.ordering === "csv" && !b.trial_list && !b.trial_list_url) {
       err(r, path, "missing_csv_source", "csv ordering requires trial_list or trial_list_url.");
+    }
+  });
+}
+
+// --- Pass 9b: trial_template items must end up with an asset by the time a
+// trial fires. An image/text/audio item may omit `asset` on the base *only*
+// if every stimulus_type used in some block provides an override. If any
+// such type leaves it unset, the runtime will try to render with no asset.
+// (feedback + blank items legitimately have no asset and are skipped.)
+
+function checkAssetCoverage(task: TaskJson, r: ValidationReport): void {
+  if (!Array.isArray(task.trial_template)) return;
+  const types = task.stimulus_types ?? {};
+  const usedTypeIds = new Set<string>();
+  for (const b of task.blocks ?? []) {
+    for (const t of b?.types ?? []) usedTypeIds.add(t);
+    for (const tle of b?.trial_list ?? []) {
+      if (typeof tle?.type === "string") usedTypeIds.add(tle.type);
+    }
+  }
+
+  task.trial_template.forEach((it, i) => {
+    if (!it) return;
+    if (it.kind === "feedback" || it.kind === "blank") return;
+    const hasBaseAsset = typeof it.asset === "string" && it.asset.length > 0;
+    if (hasBaseAsset) return;
+
+    // Base lacks asset — every *used* stimulus_type must override it.
+    const missing: string[] = [];
+    for (const typeId of usedTypeIds) {
+      const type = types[typeId];
+      if (!type) continue; // unknown-label errors are separately reported
+      const override = type.items?.[it.id];
+      const overrideAsset = override && typeof override.asset === "string" && override.asset.length > 0;
+      if (!overrideAsset) missing.push(typeId);
+    }
+    if (missing.length > 0) {
+      err(
+        r,
+        `trial_template[${i}].asset`,
+        "asset_missing",
+        `Item '${it.id}' has no asset on the base and the following stimulus_type(s) don't override it: ${missing.join(", ")}.`,
+      );
     }
   });
 }
