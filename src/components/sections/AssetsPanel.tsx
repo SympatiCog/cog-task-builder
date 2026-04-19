@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { CommaListField, KeyedList, Select, TextField, Toggle } from "../primitives";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
+import { GenerateFromFolderDialog } from "../GenerateFromFolderDialog";
 import {
   addAudio,
   addImage,
@@ -24,6 +25,7 @@ import type { AudioAsset, ImageAsset } from "../../types/task";
 export function AssetsPanel() {
   const task = useTaskStore((s) => s.task);
   const update = useTaskStore((s) => s.updateTask);
+  const [folderDialogPool, setFolderDialogPool] = useState<string | null>(null);
   if (!task) return null;
   const { images = {}, audio = {}, pools = {}, allowed_hosts = [] } = task.assets;
 
@@ -134,6 +136,15 @@ export function AssetsPanel() {
             <>
               <IdValidity path={`assets.pools.${name}`} />
               <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setFolderDialogPool(name)}
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Generate from folder...
+                  </button>
+                </div>
                 <Toggle
                   label="Share queue across stimulus types"
                   checked={pool.share_across_types ?? false}
@@ -154,6 +165,12 @@ export function AssetsPanel() {
           )}
         />
       </div>
+      {folderDialogPool && (
+        <GenerateFromFolderDialog
+          poolName={folderDialogPool}
+          onClose={() => setFolderDialogPool(null)}
+        />
+      )}
     </div>
   );
 }
