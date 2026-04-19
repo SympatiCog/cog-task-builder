@@ -123,7 +123,9 @@ export function TrialTemplatePanel() {
                       overridingTypes={typesOverridingItem(item, task.stimulus_types)}
                       onChange={(patch) => update((t) => updateTrialItem(t, index, patch))}
                       onRenameId={(newId) => {
-                        if (newId === item.id || !newId) return;
+                        // CommitTextInput already guards against no-op and
+                        // empty draft. Duplicate-id check stays — the
+                        // primitive has no peer awareness.
                         if (items.some((it) => it.id === newId)) return;
                         update((t) => renameTrialItem(t, item.id, newId));
                       }}

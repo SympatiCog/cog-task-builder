@@ -66,7 +66,9 @@ export function BlocksPanel() {
               onMoveDown={() => update((t) => moveBlock(t, index, 1))}
               onDelete={() => update((t) => deleteBlock(t, index))}
               onRename={(v) => {
-                if (v === block.id || !v) return;
+                // CommitTextInput already guards against no-op and empty
+                // draft. Duplicate-id check stays — the primitive has no
+                // peer awareness.
                 if (task.blocks.some((b) => b.id === v)) return;
                 update((t) => renameBlock(t, block.id, v));
               }}
