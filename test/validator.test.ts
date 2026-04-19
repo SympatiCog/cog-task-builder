@@ -529,27 +529,38 @@ describe("validator: targeted error codes", () => {
   // template will NOT surface as asset_missing. This is a documented
   // limitation — authors should rely on the server-side validator when
   // using csv-via-URL without an inline list.
-  it("asset_missing NOT reported for types used exclusively via trial_list_url (csv-via-URL caveat)", () => {
-    const t = base();
-    t.trial_template = [
-      { id: "cs", kind: "image", captures_response: true },
-    ];
-    t.stimulus_types = {
-      // An otherwise-reachable problem: the type has no override for `cs`.
-      remote_only: { correct_response: "left", items: {} },
-    };
-    // The block doesn't enumerate `remote_only` in `types[]` or inline
-    // `trial_list`; the CSV at the URL is presumed to carry it. Client
-    // validator under-reports by design.
-    t.blocks[0] = {
-      id: "main",
-      ordering: "csv",
-      trial_list_url: "https://example.org/trials.csv",
-    };
-    t.timing = { mode: "csv_schedule" };
-    t.assets.allowed_hosts = ["example.org"];
-    const r = validate(t);
-    expect(r.errors.some((e) => e.code === "asset_missing")).toBe(false);
+  //
+  // Paired positive + negative assertion: the SAME task with the type
+  // enumerated inline vs. only-via-URL produces asset_missing vs. silence.
+  // A future change that either (a) resolves trial_list_url client-side or
+  // (b) starts under- or over-reporting on the csv path will flip one of
+  // these assertions.
+  it("csv-via-URL caveat: asset_missing fires for inline types, silent for URL-only", () => {
+    function makeTask(urlOnly: boolean): TaskJson {
+      const t = base();
+      t.trial_template = [{ id: "cs", kind: "image", captures_response: true }];
+      t.stimulus_types = {
+        remote_only: { correct_response: "left", items: {} }, // no override → would be asset_missing
+      };
+      t.timing = { mode: "csv_schedule" };
+      t.assets.allowed_hosts = ["example.org"];
+      t.blocks[0] = urlOnly
+        ? {
+            id: "main",
+            ordering: "csv",
+            trial_list_url: "https://example.org/trials.csv",
+          }
+        : {
+            id: "main",
+            ordering: "csv",
+            trial_list: [{ type: "remote_only" }],
+          };
+      return t;
+    }
+    // Inline trial_list — type IS reachable by client, asset_missing fires.
+    expect(validate(makeTask(false)).errors.some((e) => e.code === "asset_missing")).toBe(true);
+    // URL-only — type NOT reachable by client, asset_missing silent.
+    expect(validate(makeTask(true)).errors.some((e) => e.code === "asset_missing")).toBe(false);
   });
 
   it("broken task once types are populated: asset_missing lights up for slota_left", () => {

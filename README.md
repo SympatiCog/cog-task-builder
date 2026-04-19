@@ -438,8 +438,11 @@ carry it forward; see `CLAUDE.md`).
   are load-bearing.
 - If you add a new reference between sections, the 8 rename cascades
   grow to 9 — update `src/actions/cascades.ts` and its tests.
-- Error codes are the engine's, never invented locally. If a check
-  doesn't fit an existing code, open an issue on
+- Error codes are the engine's, never invented locally. There is one
+  documented site where the builder re-uses `unknown_label` on a check
+  the engine doesn't run (the `stimulus_types.<type>.items.<id>`
+  consistency check — see `CLAUDE.md`). If a check doesn't fit an
+  existing code, open an issue on
   [cog-task-engine](https://github.com/SympatiCog/cog-task-engine)
   first.
 
