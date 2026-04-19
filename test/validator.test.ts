@@ -321,6 +321,33 @@ describe("validator: targeted error codes", () => {
     ];
     const r = validate(t);
     expect(r.errors.some((e) => e.code === "invalid_anchor_axis")).toBe(true);
+    expect(r.errors.some((e) => e.code === "invalid_anchor")).toBe(false);
+    expect(r.errors.some((e) => e.code === "anchor_target_missing")).toBe(false);
+  });
+
+  it("invalid_anchor (not invalid_anchor_axis) for 3-part anchor", () => {
+    // Engine SchemaValidator.gd:624-628 emits invalid_anchor when
+    // split('.').size() != 2. We must match — a 3-part anchor like "a.b.end"
+    // must NOT slip through as invalid_anchor_axis.
+    const t = base();
+    t.trial_template = [
+      { id: "fix", kind: "text" },
+      { id: "cs", kind: "text", anchor: "fix.inner.end", captures_response: true },
+    ];
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "invalid_anchor")).toBe(true);
+    expect(r.errors.some((e) => e.code === "invalid_anchor_axis")).toBe(false);
+  });
+
+  it("anchor_target_missing (not invalid_anchor_axis) for missing target with bad axis", () => {
+    // Engine checks target existence BEFORE axis validity. An anchor like
+    // "ghost.start" should emit `anchor_target_missing`, not
+    // `invalid_anchor_axis`.
+    const t = base();
+    t.trial_template[0].anchor = "ghost.start";
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "anchor_target_missing")).toBe(true);
+    expect(r.errors.some((e) => e.code === "invalid_anchor_axis")).toBe(false);
   });
 
   it("unknown_type (not unknown_label) for undeclared block.types[] entry", () => {
@@ -363,6 +390,23 @@ describe("validator: targeted error codes", () => {
     expect(r.errors.some((e) => e.code === "invalid_ordering")).toBe(true);
   });
 
+  it("invalid_ordering does not suppress unknown_type on the same block", () => {
+    // Engine SchemaValidator.gd:777-792 uses sequential ifs — never returns.
+    // The client must not early-return after an ordering error, or authors
+    // miss simultaneous type-name bugs.
+    const t = base();
+    t.blocks[0] = {
+      id: "main",
+      n_trials: 2,
+      types: ["ghost"],
+      // @ts-expect-error intentional bad value
+      ordering: "shuffle",
+    };
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "invalid_ordering")).toBe(true);
+    expect(r.errors.some((e) => e.code === "unknown_type")).toBe(true);
+  });
+
   it("missing n_trials on factorial_random / fixed block", () => {
     const t = base();
     // Remove n_trials entirely
@@ -384,6 +428,21 @@ describe("validator: targeted error codes", () => {
     expect(r.warnings.some((w) => w.code === "non_constant_expression")).toBe(true);
     // Should NOT fire `missing` — the expression form is accepted-with-warning.
     expect(r.errors.some((e) => e.code === "missing" && e.path.endsWith(".correct_response"))).toBe(false);
+  });
+
+  it("expression-form correct_response doesn't block unknown_label on sibling types", () => {
+    // Guards against an over-eager early-return: the non_constant_expression
+    // warning on one stimulus_type must not suppress the unknown_label error
+    // that the next type's literal-string correct_response would raise.
+    const t = base();
+    t.stimulus_types = {
+      // @ts-expect-error intentional expression form
+      left: { correct_response: { ref: "x" }, items: { cs: { asset: "txt:L" } } },
+      right: { correct_response: "ghost", items: { cs: { asset: "txt:R" } } },
+    };
+    const r = validate(t);
+    expect(r.warnings.some((w) => w.code === "non_constant_expression")).toBe(true);
+    expect(r.errors.some((e) => e.code === "unknown_label" && e.path.includes("right.correct_response"))).toBe(true);
   });
 
   it("duplicate touchscreen button id", () => {

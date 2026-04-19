@@ -536,15 +536,16 @@ function checkCaptureUniqueness(task: TaskJson, r: ValidationReport): void {
 
 // --- Pass 7: anchors (parse, target existence, cycles, response-target validity) ---
 
-// Returns `axisValid` so callers can distinguish "this doesn't parse at all"
-// (→ invalid_anchor) from "parses, but axis isn't end|response"
-// (→ invalid_anchor_axis — matches engine code).
+// Matches engine `_parse_anchor` (SchemaValidator.gd:616-647). Returns null
+// for structurally-bad anchors (missing dot, too many parts, empty target) →
+// caller emits `invalid_anchor`. Returns `axisValid: false` for anchors that
+// parse but carry an unsupported axis → caller emits `invalid_anchor_axis`
+// (but only after target existence is confirmed, to match engine order).
 function parseAnchor(anchor: string): { target: string; axis: string; axisValid: boolean } | null {
-  if (anchor === "trial_start") return { target: "trial_start", axis: "start", axisValid: true };
-  const dot = anchor.lastIndexOf(".");
-  if (dot <= 0) return null;
-  const target = anchor.slice(0, dot);
-  const axis = anchor.slice(dot + 1);
+  if (anchor === "trial_start") return { target: "trial_start", axis: "", axisValid: true };
+  const parts = anchor.split(".");
+  if (parts.length !== 2) return null;
+  const [target, axis] = parts;
   if (target.length === 0 || axis.length === 0) return null;
   return { target, axis, axisValid: VALID_ANCHOR_AXES.has(axis) };
 }
@@ -569,16 +570,10 @@ function checkAnchors(task: TaskJson, r: ValidationReport): void {
       err(r, `trial_template[${i}].anchor`, "invalid_anchor", `'${it.anchor}' must be trial_start or <id>.(end|response).`);
       return;
     }
-    if (!parsed.axisValid) {
-      err(
-        r,
-        `trial_template[${i}].anchor`,
-        "invalid_anchor_axis",
-        `anchor axis must be 'end' or 'response', got '${parsed.axis}'.`,
-      );
-      return;
-    }
     if (parsed.target === "trial_start") return;
+    // Engine order (SchemaValidator.gd:635-642): target existence is checked
+    // BEFORE axis validity. An anchor like "ghost.start" emits
+    // `anchor_target_missing`, not `invalid_anchor_axis`.
     const tgt = byId.get(parsed.target);
     if (!tgt) {
       err(
@@ -586,6 +581,15 @@ function checkAnchors(task: TaskJson, r: ValidationReport): void {
         `trial_template[${i}].anchor`,
         "anchor_target_missing",
         `Anchor references item '${parsed.target}' which is not in the template.`,
+      );
+      return;
+    }
+    if (!parsed.axisValid) {
+      err(
+        r,
+        `trial_template[${i}].anchor`,
+        "invalid_anchor_axis",
+        `anchor axis must be 'end' or 'response', got '${parsed.axis}'.`,
       );
       return;
     }
@@ -674,19 +678,19 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
     // Engine pass 10b: ordering is required and must be in the allowed set.
     // `b.ordering` is typed as `OrderingMode` but imports can carry anything —
     // cast through unknown so the runtime guard is not shortcut by the type.
+    // We DO NOT early-return on ordering errors — the engine (SchemaValidator
+    // .gd:777-792) reports them alongside `unknown_type`, `unbalanced`, etc.
+    // so authors see every problem in one pass.
     const ordering = (b as { ordering?: unknown }).ordering;
     if (typeof ordering !== "string" || ordering === "") {
       err(r, `${path}.ordering`, "missing", "ordering is required.");
-      return; // downstream ordering-sensitive checks would be meaningless
-    }
-    if (!VALID_ORDERINGS.has(ordering)) {
+    } else if (!VALID_ORDERINGS.has(ordering)) {
       err(
         r,
         `${path}.ordering`,
         "invalid_ordering",
         `ordering must be factorial_random | fixed | csv | inline (got '${ordering}').`,
       );
-      return;
     }
 
     // Engine pass 10b: factorial_random / fixed require n_trials > 0.
@@ -702,9 +706,11 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
     }
 
     if (Array.isArray(b.types)) {
-      b.types.forEach((tp, j) => {
+      b.types.forEach((tp) => {
         if (!typeKeys.has(tp)) {
-          err(r, `${path}.types[${j}]`, "unknown_type", `'${tp}' is not a declared stimulus_type.`);
+          // Engine path format: `blocks[%d].types` (no index) at
+          // SchemaValidator.gd:791. Match verbatim.
+          err(r, `${path}.types`, "unknown_type", `'${tp}' is not a declared stimulus_type.`);
         }
       });
     }
