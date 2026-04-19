@@ -112,10 +112,15 @@ describe("scanGitHubRawFolder", () => {
     // Distinct payloads → distinct hashes.
     expect(res.files[0].sha256).not.toBe(res.files[1].sha256);
 
-    // Progress: listing first, then downloading-start (done=0), then one
-    // tick per downloaded image (done=1, done=2).
+    // Progress: listing first, then downloading ticks monotonically from
+    // 0 (start) through 2 (final). Pin the exact ordering — a future
+    // regression that emits done=1 before done=0 (or reorders listing
+    // vs. downloading) would slip past a looser "some" assertion.
     expect(progress[0]).toEqual({ phase: "listing", done: 0, total: 1 });
-    expect(progress.some((p) => p.phase === "downloading" && p.done === 0 && p.total === 2)).toBe(true);
+    const downloads = progress
+      .filter((p) => p.phase === "downloading")
+      .map((p) => p.done);
+    expect(downloads).toEqual([0, 1, 2]);
     expect(progress.at(-1)).toEqual({ phase: "downloading", done: 2, total: 2 });
   });
 

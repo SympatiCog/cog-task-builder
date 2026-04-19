@@ -21,10 +21,18 @@ describe("validateOnServer", () => {
   }
 
   it("happy path: posts task JSON and returns server report", async () => {
-    const captured: { url?: string; body?: string } = {};
+    const captured: {
+      url?: string;
+      body?: string;
+      method?: string;
+      contentType?: string | null;
+    } = {};
     mockFetch((url, init) => {
       captured.url = url;
       captured.body = init?.body as string;
+      captured.method = init?.method;
+      const h = init?.headers as Record<string, string> | undefined;
+      captured.contentType = h?.["content-type"] ?? null;
       return new Response(
         JSON.stringify({
           errors: [{ path: "metadata.task_id", code: "missing", message: "x" }],
@@ -39,6 +47,10 @@ describe("validateOnServer", () => {
     expect(r.report.errors).toHaveLength(1);
     expect(r.report.errors[0].code).toBe("missing");
     expect(captured.url).toBe("https://fake.example.com/validate");
+    // Pin transport contract — regressions to GET or missing JSON
+    // content-type would make the server misread the payload.
+    expect(captured.method).toBe("POST");
+    expect(captured.contentType).toBe("application/json");
     expect(captured.body).toBeTruthy();
     expect(JSON.parse(captured.body!)).toHaveProperty("taskJson");
   });
@@ -85,7 +97,10 @@ describe("validateOnServer", () => {
       new Response("<!doctype html>...", { status: 200, headers: { "content-type": "text/html" } }),
     );
     const r = await validateOnServer(newTask());
-    expect(r.transportError).toBeTruthy();
+    // Assert the error shape matches a JSON-parse failure — protects
+    // against a silent-swallow bug where res.json() returns {} instead of
+    // throwing (both would pass a loose truthy check).
+    expect(r.transportError).toMatch(/JSON|Unexpected token|not valid/i);
     expect(r.report).toEqual({ errors: [], warnings: [] });
   });
 
