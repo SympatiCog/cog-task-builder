@@ -68,24 +68,35 @@ export function TrialTemplatePanel() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <SectionHeader
-        title="Trial template"
-        help="The ordered sequence of items in every trial. Drag to reorder. Exactly one item must have captures_response."
-      >
-        <button
-          type="button"
-          onClick={() => {
-            let i = 1;
-            const ids = new Set(itemIds);
-            let id = `item_${i}`;
-            while (ids.has(id)) { i++; id = `item_${i}`; }
-            update((t) => addTrialItem(t, stubItem("text", id)));
-          }}
-          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+      {/*
+        Sticky header + timeline: as the items list grows past the viewport
+        the author can still see the timeline preview and reach the Add
+        button without scrolling back up. Background matches <main>'s
+        bg-slate-50 so scrolling items don't bleed through; the shadow
+        line below hints at the scroll boundary.
+      */}
+      <div className="sticky top-0 z-20 bg-slate-50 pb-3">
+        <SectionHeader
+          title="Trial template"
+          help="The ordered sequence of items in every trial. Drag to reorder. Exactly one item must have captures_response."
         >
-          + Add item
-        </button>
-      </SectionHeader>
+          <button
+            type="button"
+            onClick={() => {
+              let i = 1;
+              const ids = new Set(itemIds);
+              let id = `item_${i}`;
+              while (ids.has(id)) { i++; id = `item_${i}`; }
+              update((t) => addTrialItem(t, stubItem("text", id)));
+            }}
+            className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            + Add item
+          </button>
+        </SectionHeader>
+        {items.length > 0 && <TimelineView items={items} />}
+        <div className="pointer-events-none absolute inset-x-0 -bottom-3 h-3 bg-gradient-to-b from-slate-50 to-transparent" />
+      </div>
 
       {items.length === 0 ? (
         <p className="rounded border border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
@@ -93,10 +104,9 @@ export function TrialTemplatePanel() {
         </p>
       ) : (
         <>
-          <TimelineView items={items} />
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={items.map((it, i) => it.id || String(i))} strategy={verticalListSortingStrategy}>
-              <ul className="mt-4 flex flex-col gap-2">
+              <ul className="mt-2 flex flex-col gap-2">
                 {items.map((item, index) => (
                   <SortableItem key={item.id || index} id={item.id || String(index)}>
                     <TrialItemEditor
