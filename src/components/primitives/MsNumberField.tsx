@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Field, describedBy } from "./Field";
 import {
-  FRAME_PERIOD_MS,
   REFERENCE_HZ,
   isFrameAligned,
   msToFrameCount,
@@ -44,7 +43,12 @@ export function MsNumberField(props: MsNumberFieldProps) {
       setDraft(valueToDraft(props.value));
       return;
     }
-    const snapped = snapMsToFrame(parsed);
+    // Snap first, then clamp. HTML5 `min`/`max` attributes bound the native
+    // spinner but not keyboard entry — without clamping here, typing "-10"
+    // + blur would write -16.67 on a field that declares `min={0}`.
+    let snapped = snapMsToFrame(parsed);
+    if (props.min !== undefined && snapped < props.min) snapped = props.min;
+    if (props.max !== undefined && snapped > props.max) snapped = props.max;
     if (snapped !== props.value) props.onChange(snapped);
     setDraft(valueToDraft(snapped));
   };
@@ -77,7 +81,11 @@ export function MsNumberField(props: MsNumberFieldProps) {
         }}
         min={props.min}
         max={props.max}
-        step={FRAME_PERIOD_MS}
+        // step="any" avoids the native :invalid pseudo-state firing on
+        // common authored values like 100 (not a multiple of 16.666...).
+        // Snap on blur is what enforces frame alignment; the browser
+        // validator doesn't need to know about it.
+        step="any"
         placeholder={props.placeholder}
         disabled={props.disabled}
         aria-invalid={props.error ? true : undefined}

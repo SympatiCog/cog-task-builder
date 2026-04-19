@@ -59,6 +59,25 @@ describe("frameQuantize", () => {
         expect(frames).toBe(msToFrameCount(snapped));
       }
     });
+
+    it("snapped values re-quantize cleanly on non-60 Hz displays (engine parity)", () => {
+      // The engine (FrameClock.gd:107-108) computes
+      //   frames = round(round(ms * 1000) / frame_period_us)
+      // where frame_period_us = round(1_000_000 / measured_hz). Snapped
+      // authored values must land on integer frame counts at every sane
+      // refresh rate, not just at the 60 Hz reference.
+      const snappedValues = [16.67, 33.33, 50, 66.67, 83.33, 100, 116.67, 250, 500, 1000, 1500];
+      for (const hz of [60, 75, 90, 120, 144]) {
+        const framePeriodUs = Math.round(1_000_000 / hz);
+        for (const ms of snappedValues) {
+          const requestedUs = Math.round(ms * 1000);
+          const engineFrames = Math.round(requestedUs / framePeriodUs);
+          // Ideal count = round(ms * hz / 1000). Engine should agree.
+          const idealFrames = Math.round((ms * hz) / 1000);
+          expect(engineFrames).toBe(idealFrames);
+        }
+      }
+    });
   });
 
   describe("isFrameAligned", () => {

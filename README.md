@@ -136,6 +136,13 @@ These errors are deterministic per display — they don't drift across
 trials — so within-subject comparisons stay unbiased even if absolute
 ms values differ slightly from what was authored.
 
+> Note on rounding: Godot's `round()` is half-away-from-zero (not
+> banker's rounding), matching JavaScript's `Math.round` for positive
+> values — so 7.5 frames rounds to 8 on every display the engine runs
+> on. The builder's snap math uses the same convention, which is why
+> authored 75 Hz cases line up with the engine's runtime quantization
+> exactly.
+
 ### What isn't controlled
 
 Frame-locked timing guarantees the *stimulus* onset/offset land on
