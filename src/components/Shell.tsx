@@ -11,8 +11,10 @@ import { InputsPanel } from "./sections/InputsPanel";
 import { ResponsesPanel } from "./sections/ResponsesPanel";
 import { StimulusTypesPanel } from "./sections/StimulusTypesPanel";
 import { TrialTemplatePanel } from "./sections/TrialTemplatePanel";
+import { TimingPanel } from "./sections/TimingPanel";
+import { BlocksPanel } from "./sections/BlocksPanel";
+import { SessionEndPanel } from "./sections/SessionEndPanel";
 import { ValidationPanel } from "./sections/ValidationPanel";
-import { EmptyStub } from "./sections/EmptyStub";
 
 type Section =
   | "metadata"
@@ -100,9 +102,9 @@ function SectionBody({ active }: { active: Section }) {
     case "responses":      return <ResponsesPanel />;
     case "stimulus_types": return <StimulusTypesPanel />;
     case "trial_template": return <TrialTemplatePanel />;
-    case "timing":         return <EmptyStub label="Timing"         batch={6} />;
-    case "blocks":         return <EmptyStub label="Blocks"         batch={6} />;
-    case "session_end":    return <EmptyStub label="Session end"    batch={6} />;
+    case "timing":         return <TimingPanel />;
+    case "blocks":         return <BlocksPanel />;
+    case "session_end":    return <SessionEndPanel />;
     case "validation":     return <ValidationPanel />;
   }
 }
