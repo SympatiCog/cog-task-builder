@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTaskStore } from "../store/taskStore";
 import { importTask } from "../serde/import";
 import { exportTask } from "../serde/export";
+import { validate } from "../validator";
 import { PasteImportDialog } from "./PasteImportDialog";
 
 interface ToolbarProps {
@@ -34,6 +35,13 @@ export function Toolbar({ onTogglePreview, previewOpen }: ToolbarProps = {}) {
 
   const handleExport = () => {
     if (!task) return;
+    const report = validate(task);
+    if (report.errors.length > 0) {
+      const ok = window.confirm(
+        `Validator reports ${report.errors.length} error(s). The engine will refuse this task. Export anyway?`,
+      );
+      if (!ok) return;
+    }
     const json = exportTask(task);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
