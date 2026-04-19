@@ -740,6 +740,13 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
 // if every stimulus_type used in some block provides an override. If any
 // such type leaves it unset, the runtime will try to render with no asset.
 // (feedback + blank items legitimately have no asset and are skipped.)
+//
+// Known limitation: blocks with `ordering: "csv"` and `trial_list_url` pull
+// the type list from a CSV the browser can't read at authoring time, so
+// those types won't appear in `usedTypeIds` and we under-report
+// `asset_missing` for tasks that rely on them. Authors using csv-via-URL
+// with no inline `trial_list` today should run the engine's validator
+// server-side as the authoritative check. Inline `trial_list` is covered.
 
 function checkAssetCoverage(task: TaskJson, r: ValidationReport): void {
   if (!Array.isArray(task.trial_template)) return;
@@ -750,6 +757,7 @@ function checkAssetCoverage(task: TaskJson, r: ValidationReport): void {
     for (const tle of b?.trial_list ?? []) {
       if (typeof tle?.type === "string") usedTypeIds.add(tle.type);
     }
+    // NB: b.trial_list_url is intentionally NOT resolved. See caveat above.
   }
 
   task.trial_template.forEach((it, i) => {

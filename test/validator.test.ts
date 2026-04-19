@@ -523,6 +523,35 @@ describe("validator: targeted error codes", () => {
     });
   });
 
+  // Caveat: checkAssetCoverage only inspects inline block.trial_list, not
+  // csv-via-URL. A task that lists its types ONLY via trial_list_url will
+  // appear to "not use" those types client-side, so a missing asset on the
+  // template will NOT surface as asset_missing. This is a documented
+  // limitation — authors should rely on the server-side validator when
+  // using csv-via-URL without an inline list.
+  it("asset_missing NOT reported for types used exclusively via trial_list_url (csv-via-URL caveat)", () => {
+    const t = base();
+    t.trial_template = [
+      { id: "cs", kind: "image", captures_response: true },
+    ];
+    t.stimulus_types = {
+      // An otherwise-reachable problem: the type has no override for `cs`.
+      remote_only: { correct_response: "left", items: {} },
+    };
+    // The block doesn't enumerate `remote_only` in `types[]` or inline
+    // `trial_list`; the CSV at the URL is presumed to carry it. Client
+    // validator under-reports by design.
+    t.blocks[0] = {
+      id: "main",
+      ordering: "csv",
+      trial_list_url: "https://example.org/trials.csv",
+    };
+    t.timing = { mode: "csv_schedule" };
+    t.assets.allowed_hosts = ["example.org"];
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "asset_missing")).toBe(false);
+  });
+
   it("broken task once types are populated: asset_missing lights up for slota_left", () => {
     const t = base();
     t.trial_template = [

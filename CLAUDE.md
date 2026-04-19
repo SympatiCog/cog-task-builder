@@ -134,6 +134,16 @@ new validator code:
 Do NOT invent codes. If a check doesn't fit any existing engine code,
 raise it upstream in the engine first, then port.
 
+**One documented exception.** `checkStimulusTypes` emits `unknown_label` on
+`stimulus_types.<type>.items.<id>` when the id doesn't match any
+`trial_template` item. The engine has no equivalent check — such overrides
+are silently ignored at runtime, which is a real authoring bug (the author
+wrote an override that will never fire). This is the only builder-only use
+of an engine code; it reuses `unknown_label` because semantically it is
+the same class of error ("this name isn't declared anywhere"). If this
+check ever moves upstream, it should get its own code (e.g.
+`unknown_item_override`) and this divergence should disappear.
+
 ### Canonical key order in `serde/keyOrder.ts`
 
 Exported JSON keys are emitted in a lookup-table order that matches the
@@ -299,7 +309,7 @@ source of truth for what's accepted. If the engine adds a new prefix
 ## Testing
 
 ```bash
-npm run test          # vitest, ~120 tests
+npm run test          # vitest, ~140 tests
 npm run test:watch    # iterative
 npm run typecheck     # tsc -b --noEmit
 npm run build         # typecheck + vite build
@@ -325,9 +335,10 @@ Every batch's contract is covered:
 - **Actions** (`test/assets_actions.test.ts`, `test/blocks.test.ts`,
   `test/trial_template.test.ts`, `test/poolFolder.test.ts`): CRUD
   semantics, no-ops on collisions, schema bumps.
-- **Validator** (`test/validator.test.ts`): ~33 targeted error-code
+- **Validator** (`test/validator.test.ts`): ~50 targeted error-code
   cases + all engine fixtures must validate clean + regression
-  fixtures for known-bad shapes (empty_types, asset_missing).
+  fixtures for known-bad shapes (empty_types, asset_missing,
+  invalid_anchor_axis, remote-asset checks).
 - **Utilities** (`test/slugify.test.ts`, `test/overrides.test.ts`,
   `test/githubFolder.test.ts`, `test/keyboard_shortcuts.test.ts`).
 

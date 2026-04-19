@@ -329,7 +329,7 @@ to pick up, arrow keys to move, Space to drop).
 ```bash
 npm install
 npm run dev        # localhost:5173, HMR
-npm run test       # vitest — ~120 tests
+npm run test       # vitest — ~140 tests
 npm run typecheck  # tsc -b --noEmit
 npm run build      # typecheck + vite build → dist/
 ```
