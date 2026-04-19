@@ -7,16 +7,9 @@ export interface PreparedEntry {
   asset: ImageAsset;       // fully-formed asset to register
 }
 
-// Apply a batch of prepared entries to the task:
-//   1. Register any not-yet-declared images under their id (overwrites a
-//      collision only when the caller set an id that already exists —
-//      collision resolution is the preparer's job, not ours).
-//   2. Union the entry ids into the named pool's members (order preserved,
-//      de-duplicated).
-//   3. If any asset is remote, ensure the URL's host is in
-//      assets.allowed_hosts (no-op when the prefix wasn't a parseable URL
-//      or the host is already present).
-// Pure: takes and returns TaskJson without mutation.
+// Collision resolution (slugify + deduplicate ids) is the preparer's
+// responsibility — this action trusts entries and will overwrite an
+// existing image if a caller passes an id that already exists.
 export function applyFolderToPool(
   task: TaskJson,
   poolName: string,

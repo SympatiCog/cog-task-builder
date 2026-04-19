@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { CommitTextInput } from "./CommitTextInput";
 
 export interface KeyedListProps<T> {
   label: string;
@@ -68,35 +69,13 @@ interface KeyedRowProps {
 }
 
 function KeyedRow({ id, label, onRename, onDelete, children }: KeyedRowProps) {
-  // Local buffer so typing doesn't fire rename per keystroke. Sync from prop
-  // when id changes externally (e.g., after a rename elsewhere or after a
-  // cascade snap-back on a collision).
-  const [draft, setDraft] = useState(id);
-  useEffect(() => setDraft(id), [id]);
-
-  const commit = () => {
-    if (draft !== id && draft.length > 0) onRename(id, draft);
-  };
-
   return (
     <li className="flex flex-col gap-2 p-2">
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              setDraft(id);
-              (e.currentTarget as HTMLInputElement).blur();
-            }
-          }}
-          aria-label={`${label} id`}
+        <CommitTextInput
+          value={id}
+          onCommit={(next) => onRename(id, next)}
+          ariaLabel={`${label} id`}
           className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
         />
         <button

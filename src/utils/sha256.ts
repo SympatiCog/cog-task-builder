@@ -1,8 +1,6 @@
-// Compute SHA-256 of a File's bytes using the browser's SubtleCrypto API,
-// returning the hex-encoded digest in lowercase — matches the format the
-// engine expects on the wire (§4.1 of LLM_TASK_AUTHORING.md). Large folders
-// are processed one at a time to avoid pinning a whole folder's worth of
-// bytes in memory.
+// Lowercase hex — matches the engine wire format (§4.1 of
+// LLM_TASK_AUTHORING.md). Callers hash sequentially to avoid pinning a
+// whole folder's worth of bytes in memory at once.
 export async function sha256File(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
   const hash = await crypto.subtle.digest("SHA-256", buf);

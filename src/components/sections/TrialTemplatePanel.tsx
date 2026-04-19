@@ -1,6 +1,7 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { AssetRefPicker, NumberField, Select, TextField, Toggle } from "../primitives";
+import { CommitTextInput } from "../primitives/CommitTextInput";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
 import {
@@ -194,22 +195,13 @@ function TrialItemEditor(props: EditorProps) {
   );
   const captureIssue = issues.find((i) => i.code === "multiple_capture");
 
-  const [idDraft, setIdDraft] = useState(item.id);
-  useEffect(() => setIdDraft(item.id), [item.id]);
-
   return (
     <div className="flex w-full flex-col gap-3">
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={idDraft}
-          onChange={(e) => setIdDraft(e.target.value)}
-          onBlur={() => props.onRenameId(idDraft)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-            else if (e.key === "Escape") { setIdDraft(item.id); (e.currentTarget as HTMLInputElement).blur(); }
-          }}
-          aria-label="Item id"
+        <CommitTextInput
+          value={item.id}
+          onCommit={props.onRenameId}
+          ariaLabel="Item id"
           className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
         />
         {props.overridingTypes.length > 0 && (

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTaskStore } from "../store/taskStore";
 import { validate, type ValidationReport, type ValidationIssue } from "./index";
 
+
 // Memoized validation over the current task. The task object reference changes
 // on every edit (updateTask returns a new object), so useMemo's dependency
 // catches edits correctly.
@@ -27,9 +28,3 @@ export function useIssuesAt(pathPrefix: string): ValidationIssue[] {
   }, [report, pathPrefix]);
 }
 
-export function issueClass(issues: ValidationIssue[], allIssues: ValidationReport): "error" | "warning" | null {
-  const errorCodes = new Set(allIssues.errors.map((e) => e.code + e.path));
-  for (const iss of issues) if (errorCodes.has(iss.code + iss.path)) return "error";
-  if (issues.length > 0) return "warning";
-  return null;
-}

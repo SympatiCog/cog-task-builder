@@ -1,11 +1,8 @@
 import type { TaskJson } from "../types/task";
 
-// Factory for a blank schema-1.1 task. The minimum set of keys that parses
-// against the engine's shape check; every section filled from the "conventional
-// defaults" in LLM_TASK_AUTHORING.md §12a so authors start from a reasonable
-// baseline. Validator passes will still flag incomplete fields (missing
-// stimulus_types, etc.) — this factory is a starting point, not a finished
-// task.
+// Section defaults come from LLM_TASK_AUTHORING.md §12a ("conventional
+// defaults"). Validator still flags incomplete fields — this is a starting
+// point, not a finished task.
 export function newTask(): TaskJson {
   return {
     schema_version: "1.1.0",
