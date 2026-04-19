@@ -302,6 +302,168 @@ describe("validator: targeted error codes", () => {
     // should fire on the next run — covered by the next test.
   });
 
+  // ---- P0 fix regressions (2026-04-19 code review) ----
+
+  it("early-returns on shape failure (no cascading errors from later passes)", () => {
+    // stimulus_types as an array (not object) is a shape failure. Without the
+    // early-return, identifier pass would run Object.keys on the array and
+    // emit a swarm of invalid_identifier errors for "0","1","2".
+    const r = validate({ schema_version: "1.1.0", stimulus_types: [1, 2, 3] } as unknown as TaskJson);
+    expect(r.errors.some((e) => e.code === "wrong_type")).toBe(true);
+    expect(r.errors.some((e) => e.code === "invalid_identifier")).toBe(false);
+  });
+
+  it("invalid_anchor_axis for .start axis (engine rejects)", () => {
+    const t = base();
+    t.trial_template = [
+      { id: "fix", kind: "text" },
+      { id: "cs", kind: "text", anchor: "fix.start", captures_response: true },
+    ];
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "invalid_anchor_axis")).toBe(true);
+  });
+
+  it("unknown_type (not unknown_label) for undeclared block.types[] entry", () => {
+    const t = base();
+    t.blocks[0] = { id: "main", n_trials: 2, types: ["ghost"], ordering: "fixed" };
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "unknown_type")).toBe(true);
+    expect(r.errors.some((e) => e.code === "unknown_label" && e.path.startsWith("blocks["))).toBe(false);
+  });
+
+  it("unknown_kind on trial_template item", () => {
+    const t = base();
+    // @ts-expect-error intentional bad kind
+    t.trial_template[0].kind = "video";
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "unknown_kind")).toBe(true);
+  });
+
+  it("missing kind on trial_template item", () => {
+    const t = base();
+    // @ts-expect-error deliberately absent
+    delete t.trial_template[0].kind;
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "missing" && e.path.endsWith(".kind"))).toBe(true);
+  });
+
+  it("missing ordering on block", () => {
+    const t = base();
+    // @ts-expect-error deliberately absent
+    delete t.blocks[0].ordering;
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "missing" && e.path === "blocks[0].ordering")).toBe(true);
+  });
+
+  it("invalid_ordering on block", () => {
+    const t = base();
+    // @ts-expect-error intentional bad value
+    t.blocks[0].ordering = "shuffle";
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "invalid_ordering")).toBe(true);
+  });
+
+  it("missing n_trials on factorial_random / fixed block", () => {
+    const t = base();
+    // Remove n_trials entirely
+    delete t.blocks[0].n_trials;
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "missing" && e.path === "blocks[0].n_trials")).toBe(true);
+
+    const t2 = base();
+    t2.blocks[0] = { id: "main", n_trials: 0, types: ["left"], ordering: "fixed" };
+    const r2 = validate(t2);
+    expect(r2.errors.some((e) => e.code === "missing" && e.path === "blocks[0].n_trials")).toBe(true);
+  });
+
+  it("non_constant_expression warning for object correct_response", () => {
+    const t = base();
+    // @ts-expect-error intentional expression form
+    t.stimulus_types.left.correct_response = { ref: "something" };
+    const r = validate(t);
+    expect(r.warnings.some((w) => w.code === "non_constant_expression")).toBe(true);
+    // Should NOT fire `missing` — the expression form is accepted-with-warning.
+    expect(r.errors.some((e) => e.code === "missing" && e.path.endsWith(".correct_response"))).toBe(false);
+  });
+
+  it("duplicate touchscreen button id", () => {
+    const t = base();
+    t.inputs = {
+      keyboard: ["f"],
+      touchscreen_buttons: [
+        { id: "left", label: "L", position: "middle_left" },
+        { id: "left", label: "L2", position: "middle_right" },
+      ],
+    };
+    const r = validate(t);
+    expect(r.errors.some((e) => e.code === "duplicate" && e.path.includes("touchscreen_buttons"))).toBe(true);
+  });
+
+  describe("remote asset checks", () => {
+    function remoteBase(): TaskJson {
+      const t = base();
+      t.assets.allowed_hosts = ["cdn.example.org"];
+      t.assets.images = {
+        im: {
+          source: "remote",
+          url: "https://cdn.example.org/x.png",
+          sha256: "a".repeat(64),
+        },
+      };
+      return t;
+    }
+
+    it("clean remote asset passes", () => {
+      const r = validate(remoteBase());
+      expect(r.errors).toEqual([]);
+    });
+
+    it("missing url on remote asset", () => {
+      const t = remoteBase();
+      // @ts-expect-error deliberately absent
+      delete t.assets.images!.im.url;
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "missing" && e.path.endsWith(".url"))).toBe(true);
+    });
+
+    it("missing sha256 on remote asset", () => {
+      const t = remoteBase();
+      // @ts-expect-error deliberately absent
+      delete t.assets.images!.im.sha256;
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "missing" && e.path.endsWith(".sha256"))).toBe(true);
+    });
+
+    it("non_https URL on remote asset", () => {
+      const t = remoteBase();
+      // @ts-expect-error intentional insecure URL
+      t.assets.images!.im.url = "http://cdn.example.org/x.png";
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "non_https")).toBe(true);
+    });
+
+    it("host_not_whitelisted on remote asset", () => {
+      const t = remoteBase();
+      t.assets.allowed_hosts = ["other.example.org"];
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "host_not_whitelisted")).toBe(true);
+    });
+
+    it("missing allowed_hosts when any asset is remote", () => {
+      const t = remoteBase();
+      delete t.assets.allowed_hosts;
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "missing" && e.path === "assets.allowed_hosts")).toBe(true);
+    });
+
+    it("bundled-only task tolerates absent allowed_hosts", () => {
+      const t = base();
+      t.assets.images = { im: { source: "bundled", path: "res://x.png" } };
+      const r = validate(t);
+      expect(r.errors.some((e) => e.code === "missing" && e.path === "assets.allowed_hosts")).toBe(false);
+    });
+  });
+
   it("broken task once types are populated: asset_missing lights up for slota_left", () => {
     const t = base();
     t.trial_template = [

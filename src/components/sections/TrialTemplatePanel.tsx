@@ -400,7 +400,6 @@ function AnchorPicker({ anchor, selfId, allItems, onChange, error }: AnchorPicke
     ];
     for (const it of allItems) {
       if (!it.id || it.id === selfId) continue;
-      opts.push({ value: `${it.id}.start`, label: `${it.id}.start` });
       opts.push({ value: `${it.id}.end`, label: `${it.id}.end` });
       if (it.captures_response) {
         opts.push({ value: `${it.id}.response`, label: `${it.id}.response` });

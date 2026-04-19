@@ -14,7 +14,7 @@ export interface ValidationReport {
 const MAX_SCHEMA = "1.1.0";
 const ID_RE = /^[a-z0-9_]+$/;
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
-const VALID_ANCHOR_AXES = new Set(["start", "end", "response"]);
+const VALID_ANCHOR_AXES = new Set(["end", "response"]);
 
 // Pure-functional port of the engine's SchemaValidator cheap passes. Error
 // codes are verbatim from LLM_TASK_AUTHORING.md §10 so client- and server-
@@ -29,9 +29,16 @@ export function validate(task: TaskJson | null | undefined): ValidationReport {
     return r;
   }
   checkShape(task, r);
-  if (r.errors.some((e) => e.code === "schema_too_new")) return r;
+  // Engine (`SchemaValidator.gd:31-32`) early-returns on any shape error —
+  // later passes assume basic shape is present. Without this, malformed
+  // imports (e.g. stimulus_types as an array) cascade into noisy spurious
+  // errors in identifier + downstream passes.
+  if (r.errors.length > 0) return r;
   checkIdentifiers(task, r);
+  checkKinds(task, r);
+  checkTouchscreenButtons(task, r);
   checkPools(task, r);
+  checkRemoteAssets(task, r);
   checkAssetRefs(task, r);
   checkResponses(task, r);
   checkStimulusTypes(task, r);
@@ -179,6 +186,52 @@ function checkId(value: string, path: string, r: ValidationReport): void {
   }
 }
 
+// --- Pass 2b: trial-item kind allowlist (engine pass 7b) ---
+
+const ALLOWED_KINDS = new Set(["image", "text", "audio", "feedback", "blank"]);
+
+function checkKinds(task: TaskJson, r: ValidationReport): void {
+  if (!Array.isArray(task.trial_template)) return;
+  task.trial_template.forEach((it, i) => {
+    if (!it || typeof it !== "object") return;
+    const kind = (it as { kind?: unknown }).kind;
+    if (kind === undefined || kind === null || kind === "") {
+      err(r, `trial_template[${i}].kind`, "missing", "kind is required.");
+      return;
+    }
+    if (typeof kind !== "string" || !ALLOWED_KINDS.has(kind)) {
+      err(
+        r,
+        `trial_template[${i}].kind`,
+        "unknown_kind",
+        `kind '${String(kind)}' is not one of image | text | audio | feedback | blank.`,
+      );
+    }
+  });
+}
+
+// --- Pass 2c: touchscreen button id uniqueness (engine pass 7c) ---
+
+function checkTouchscreenButtons(task: TaskJson, r: ValidationReport): void {
+  const btns = task.inputs?.touchscreen_buttons;
+  if (!Array.isArray(btns)) return;
+  const seen = new Set<string>();
+  btns.forEach((b, i) => {
+    if (!b || typeof b !== "object") return;
+    const id = (b as { id?: unknown }).id;
+    if (typeof id !== "string" || id === "") return; // identifier pass handles shape
+    if (seen.has(id)) {
+      err(
+        r,
+        `inputs.touchscreen_buttons[${i}].id`,
+        "duplicate",
+        `touchscreen button id '${id}' is not unique.`,
+      );
+    }
+    seen.add(id);
+  });
+}
+
 // --- Pass 3: pools (schema 1.1) ---
 
 function checkPools(task: TaskJson, r: ValidationReport): void {
@@ -225,6 +278,64 @@ function checkPools(task: TaskJson, r: ValidationReport): void {
       }
       seen.add(m);
     });
+  }
+}
+
+// --- Pass 3b: remote assets (engine pass 4) ---
+//
+// Remote entries need an https URL whose host is whitelisted and a sha256
+// digest. If any asset in images/audio declares source:"remote",
+// allowed_hosts must be non-empty.
+
+function extractHost(url: string): string {
+  if (!url.startsWith("https://")) return "";
+  const afterScheme = url.slice("https://".length);
+  const hostAndPort = afterScheme.split("/")[0].split("?")[0].split("#")[0];
+  if (hostAndPort.includes("@")) return ""; // userinfo in authority — reject
+  return hostAndPort.split(":")[0];
+}
+
+function checkRemoteAssets(task: TaskJson, r: ValidationReport): void {
+  const assets = task.assets;
+  if (!assets || typeof assets !== "object") return;
+  const allowedHosts = Array.isArray(assets.allowed_hosts) ? assets.allowed_hosts : [];
+  let anyRemote = false;
+
+  for (const kind of ["images", "audio"] as const) {
+    const bucket = assets[kind];
+    if (!bucket || typeof bucket !== "object") continue;
+    for (const [id, spec] of Object.entries(bucket)) {
+      if (!spec || typeof spec !== "object") continue;
+      const src = (spec as { source?: unknown }).source;
+      if (src !== "remote") continue;
+      anyRemote = true;
+      const urlPath = `assets.${kind}.${id}.url`;
+      const shaPath = `assets.${kind}.${id}.sha256`;
+      const url = (spec as { url?: unknown }).url;
+      const sha = (spec as { sha256?: unknown }).sha256;
+      if (typeof url !== "string" || url === "") {
+        err(r, urlPath, "missing", "remote asset requires a url.");
+      } else if (!url.startsWith("https://")) {
+        err(r, urlPath, "non_https", "remote asset url must use https://.");
+      } else {
+        const host = extractHost(url);
+        if (!allowedHosts.includes(host)) {
+          err(r, urlPath, "host_not_whitelisted", `host '${host}' is not in assets.allowed_hosts.`);
+        }
+      }
+      if (typeof sha !== "string" || sha === "") {
+        err(r, shaPath, "missing", "remote asset requires a sha256 digest.");
+      }
+    }
+  }
+
+  if (anyRemote && allowedHosts.length === 0) {
+    err(
+      r,
+      "assets.allowed_hosts",
+      "missing",
+      "allowed_hosts is required when any asset source is 'remote'.",
+    );
   }
 }
 
@@ -355,12 +466,29 @@ function checkStimulusTypes(task: TaskJson, r: ValidationReport): void {
 
   for (const [typeId, t] of Object.entries(task.stimulus_types)) {
     const cr = t?.correct_response;
-    if (typeof cr !== "string") {
+    if (cr === undefined || cr === null) {
       err(
         r,
         `stimulus_types.${typeId}.correct_response`,
         "missing",
-        "correct_response is required (literal form only in v1.x runtime).",
+        "correct_response is required.",
+      );
+    } else if (typeof cr === "object" && !Array.isArray(cr)) {
+      // Engine pass 11: expression-form is accepted but v1 evaluates only
+      // literal correct_response. We can't run the evaluator client-side, so
+      // treat every expression-form as potentially non-constant and warn.
+      warn(
+        r,
+        `stimulus_types.${typeId}.correct_response`,
+        "non_constant_expression",
+        "expression-form correct_response is a v2 feature; v1 evaluates literals only.",
+      );
+    } else if (typeof cr !== "string") {
+      err(
+        r,
+        `stimulus_types.${typeId}.correct_response`,
+        "missing",
+        "correct_response must be a string literal or expression object.",
       );
     } else if (!responseKeys.has(cr)) {
       err(
@@ -408,14 +536,17 @@ function checkCaptureUniqueness(task: TaskJson, r: ValidationReport): void {
 
 // --- Pass 7: anchors (parse, target existence, cycles, response-target validity) ---
 
-function parseAnchor(anchor: string): { target: string; axis: string } | null {
-  if (anchor === "trial_start") return { target: "trial_start", axis: "start" };
+// Returns `axisValid` so callers can distinguish "this doesn't parse at all"
+// (→ invalid_anchor) from "parses, but axis isn't end|response"
+// (→ invalid_anchor_axis — matches engine code).
+function parseAnchor(anchor: string): { target: string; axis: string; axisValid: boolean } | null {
+  if (anchor === "trial_start") return { target: "trial_start", axis: "start", axisValid: true };
   const dot = anchor.lastIndexOf(".");
   if (dot <= 0) return null;
   const target = anchor.slice(0, dot);
   const axis = anchor.slice(dot + 1);
-  if (!VALID_ANCHOR_AXES.has(axis)) return null;
-  return { target, axis };
+  if (target.length === 0 || axis.length === 0) return null;
+  return { target, axis, axisValid: VALID_ANCHOR_AXES.has(axis) };
 }
 
 function checkAnchors(task: TaskJson, r: ValidationReport): void {
@@ -435,7 +566,16 @@ function checkAnchors(task: TaskJson, r: ValidationReport): void {
     }
     const parsed = parseAnchor(it.anchor);
     if (!parsed) {
-      err(r, `trial_template[${i}].anchor`, "invalid_anchor", `'${it.anchor}' must be trial_start or <id>.(start|end|response).`);
+      err(r, `trial_template[${i}].anchor`, "invalid_anchor", `'${it.anchor}' must be trial_start or <id>.(end|response).`);
+      return;
+    }
+    if (!parsed.axisValid) {
+      err(
+        r,
+        `trial_template[${i}].anchor`,
+        "invalid_anchor_axis",
+        `anchor axis must be 'end' or 'response', got '${parsed.axis}'.`,
+      );
       return;
     }
     if (parsed.target === "trial_start") return;
@@ -464,7 +604,7 @@ function checkAnchors(task: TaskJson, r: ValidationReport): void {
   items.forEach((it) => {
     if (!it?.id || typeof it.anchor !== "string") return;
     const parsed = parseAnchor(it.anchor);
-    if (parsed && parsed.target !== "trial_start" && byId.has(parsed.target)) {
+    if (parsed && parsed.axisValid && parsed.target !== "trial_start" && byId.has(parsed.target)) {
       edges.set(it.id, parsed.target);
     }
   });
@@ -521,6 +661,8 @@ function checkTiming(task: TaskJson, r: ValidationReport): void {
 
 // --- Pass 9: blocks ---
 
+const VALID_ORDERINGS = new Set(["factorial_random", "fixed", "csv", "inline"]);
+
 function checkBlocks(task: TaskJson, r: ValidationReport): void {
   if (!Array.isArray(task.blocks)) return;
   const typeKeys = new Set(Object.keys(task.stimulus_types ?? {}));
@@ -528,10 +670,41 @@ function checkBlocks(task: TaskJson, r: ValidationReport): void {
   task.blocks.forEach((b, i) => {
     if (!b) return;
     const path = `blocks[${i}]`;
+
+    // Engine pass 10b: ordering is required and must be in the allowed set.
+    // `b.ordering` is typed as `OrderingMode` but imports can carry anything —
+    // cast through unknown so the runtime guard is not shortcut by the type.
+    const ordering = (b as { ordering?: unknown }).ordering;
+    if (typeof ordering !== "string" || ordering === "") {
+      err(r, `${path}.ordering`, "missing", "ordering is required.");
+      return; // downstream ordering-sensitive checks would be meaningless
+    }
+    if (!VALID_ORDERINGS.has(ordering)) {
+      err(
+        r,
+        `${path}.ordering`,
+        "invalid_ordering",
+        `ordering must be factorial_random | fixed | csv | inline (got '${ordering}').`,
+      );
+      return;
+    }
+
+    // Engine pass 10b: factorial_random / fixed require n_trials > 0.
+    if (b.ordering === "factorial_random" || b.ordering === "fixed") {
+      if (typeof b.n_trials !== "number" || b.n_trials <= 0) {
+        err(
+          r,
+          `${path}.n_trials`,
+          "missing",
+          `${b.ordering} ordering requires n_trials > 0.`,
+        );
+      }
+    }
+
     if (Array.isArray(b.types)) {
       b.types.forEach((tp, j) => {
         if (!typeKeys.has(tp)) {
-          err(r, `${path}.types[${j}]`, "unknown_label", `'${tp}' is not a declared stimulus_type.`);
+          err(r, `${path}.types[${j}]`, "unknown_type", `'${tp}' is not a declared stimulus_type.`);
         }
       });
     }
