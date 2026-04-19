@@ -88,7 +88,8 @@ GitHub. Each session draws a subset.
 - **+ Add pool** → `slotA_left`.
 - Click **Generate from folder...**.
 - In the dialog, paste the raw GitHub URL into the "From GitHub folder
-  URL" field:
+  URL" field (see ["Getting a GitHub URL for your stimuli"](#getting-a-github-url-for-your-stimuli)
+  below if you haven't hosted yours yet):
   ```
   https://raw.githubusercontent.com/<owner>/<repo>/<commit-sha>/symbols/slotA_left/
   ```
@@ -98,9 +99,6 @@ GitHub. Each session draws a subset.
   pool's `members[]` now lists them; `raw.githubusercontent.com` is
   added to `assets.allowed_hosts`.
 - Repeat for `slotA_right`, `slotB_left`, `slotB_right`.
-
-Tip: pin the URL to a full commit SHA, not a branch name. Branches
-silently drift; commit SHAs are reproducible.
 
 **2. Inputs + Responses**
 
@@ -217,6 +215,74 @@ two entry points:
 Both modes preview every row (id, path/URL, sha256) before Apply,
 flag id collisions with existing images in amber, and auto-suffix
 colliding ids (`_2`, `_3`, ...).
+
+### Getting a GitHub URL for your stimuli
+
+The scan expects a URL of this shape:
+
+```
+https://raw.githubusercontent.com/<owner>/<repo>/<commit-sha>/<path>/<folder>/
+```
+
+To get one for your own data:
+
+**1. Host the folder on GitHub.** Create a public repo (private repos
+won't work — the builder's fetch is anonymous), push your images, and
+note the latest commit SHA:
+
+```bash
+cd path/to/my-stimuli
+git init
+git add symbols/            # your images
+git commit -m "Initial stimulus set"
+git remote add origin https://github.com/<owner>/<repo>.git
+git push -u origin main
+git rev-parse HEAD          # prints the commit SHA you'll need below
+```
+
+**2. Construct the raw URL.** The easy way from the GitHub UI:
+
+1. Open the repo on github.com, navigate to the folder you want.
+2. Click any image in it, then click **Raw** (top-right). Your browser
+   lands on a URL like:
+   ```
+   https://raw.githubusercontent.com/<owner>/<repo>/main/symbols/slotA_left/slotA_left_12.png
+   ```
+3. Delete the filename from the end so you're left with the folder URL
+   (trailing `/` recommended but not required):
+   ```
+   https://raw.githubusercontent.com/<owner>/<repo>/main/symbols/slotA_left/
+   ```
+4. Replace `main` with the commit SHA from step 1 (copy it from
+   `git rev-parse HEAD` output, or from the commit page on github.com —
+   click the commit hash next to "Latest commit" and the URL bar shows
+   the full 40-char SHA):
+   ```
+   https://raw.githubusercontent.com/<owner>/<repo>/<commit-sha>/symbols/slotA_left/
+   ```
+
+That's the URL to paste into the scanner.
+
+**Why commit SHA, not branch?** Branch-pinned URLs (`main`, `master`)
+work for scanning today, but the task JSON will embed those URLs
+verbatim. Any future push to the branch changes what the engine fetches
+at runtime — silently. Commit SHAs are immutable; they guarantee the
+participant sees the exact stimulus set you validated against. If you
+add new stimuli, generate a new task JSON pinned to the new commit and
+treat it as a new task version.
+
+**URL forms that WILL NOT work**, and why:
+
+| URL form | Problem |
+|---|---|
+| `https://github.com/.../blob/<ref>/...` | The HTML preview page, not the file bytes. SHA-256 won't match. |
+| Any 302 redirect to a different host | The engine has `max_redirects = 0`. Use the canonical raw URL directly. |
+| Branch URLs (`<ref>` = `main`) | Works but drifts — see above. |
+| Private repos | Anonymous fetch returns 404. Mirror the files to a public repo or a CDN. |
+
+**Rate limit.** Anonymous GitHub API allows ~60 requests/hour per IP
+(one listing + N downloads per scan). For a lab with many concurrent
+authors behind a shared IP, mirror stimuli to a CDN.
 
 ### Rename cascades
 
