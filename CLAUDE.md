@@ -20,10 +20,10 @@ src/
                         plus cascades.ts — 8 rename cascades for the
                         cross-ref rules (see "Invariants").
   components/
-    primitives/         Field, TextField, NumberField, Toggle, Select,
-                        KeyedList, MultiSelect, AssetRefPicker,
-                        CommaListField — every form control used by the
-                        section panels.
+    primitives/         Field, TextField, NumberField, MsNumberField,
+                        Toggle, Select, KeyedList, MultiSelect,
+                        AssetRefPicker, CommaListField, CommitTextInput
+                        — every form control used by the section panels.
     sections/           one panel per task-JSON section (Metadata, Theme,
                         Assets, Inputs, Responses, StimulusTypes,
                         TrialTemplate, Timing, Blocks, SessionEnd) +
@@ -226,6 +226,23 @@ Renaming fires cross-ref cascades. Per-keystroke commit walks the whole
 document for every letter the user types (and can collide mid-word). Use
 the local-draft + commit-on-blur pattern from `KeyedList` and the id
 inputs in `TrialTemplatePanel` / `BlocksPanel`.
+
+### Millisecond fields use `MsNumberField`, not `NumberField`
+
+Every `_ms`-suffixed field in the schema is a duration that the engine
+quantizes to integer display frames at runtime. `MsNumberField` snaps
+its value to the nearest 1/60 s (≈16.67 ms) on blur and displays a
+"= N frames @ 60 Hz" hint. This reinforces the "digital time is
+discrete" mental model and keeps authored values honest against the
+lowest-common-denominator refresh rate. The snap utility is
+`src/utils/frameQuantize.ts` — do not duplicate the arithmetic.
+
+Counter-example fields that take ms but are NOT durations (e.g., a
+future `latency_budget_ms` threshold) should still use plain
+`NumberField`. `extras.size_pct`, `n_trials`, `seed`,
+`max_type_repeat` — none of these are durations and continue to use
+`NumberField`. Context: README's "How timing works" section explains
+the user-facing reasoning.
 
 ### Comma-list fields use `CommaListField`, not `TextField`
 

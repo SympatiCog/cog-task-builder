@@ -75,6 +75,104 @@ When every participant should see the same images, use static
 
 ---
 
+## How timing works
+
+Reaction-time paradigms live or die by timing precision. The short
+version: **the display is the clock.** Everything else flows from
+that.
+
+### The display is the clock
+
+Browsers (and Godot exported to HTML5) draw frames in lockstep with
+the monitor's vertical sync. A 60 Hz display ticks once every 16.666…
+ms; a 120 Hz display every 8.333… ms; a 144 Hz display every 6.944 ms.
+The engine can't show a stimulus for 50 ms on a 60 Hz display — it can
+only show it for whole-frame multiples near 50 ms (48 ms = 3 frames,
+67 ms = 4 frames, etc.). Every duration you author is really a request
+for "show this for approximately *N* frames on the actual display."
+
+### Refresh-rate quantization at runtime
+
+The engine's `FrameClock` measures the participant's display rate at
+startup (`refresh_hz_measured`). Every authored `_ms` value is then
+converted to an integer frame count via
+`round(ms × refresh_hz / 1000)`. Presentation is frame-locked to that
+count — not to a wall-clock deadline. This avoids drift from tab
+throttling, background-tab pauses, and OS-scheduler jitter.
+
+### What the builder does: 60 Hz reference snapping
+
+Every ms field in the builder **snaps to the nearest multiple of
+1/60 s (≈ 16.67 ms) on blur.** A hint below each field shows the
+frame count at the 60 Hz reference:
+
+- `duration_ms: 100` → `= 6 frames @ 60 Hz` (exact)
+- `duration_ms: 250` → `= 15 frames @ 60 Hz` (exact)
+- `duration_ms: 50` → `= 3 frames @ 60 Hz` (exact)
+- `duration_ms: 17` → `≈ 1 frame @ 60 Hz` (snapped from 17 → 16.67)
+- `duration_ms: 500` → `= 30 frames @ 60 Hz` (exact)
+
+60 Hz is the authoring reference because it's the lowest-common
+denominator for consumer displays. Authoring at a frame-aligned value
+keeps the request "honest" — you're asking for an exact frame count
+on a 60 Hz display, and the engine will re-quantize cleanly on faster
+displays.
+
+### Worst-case timing error
+
+For an authored `100 ms` duration on a representative set of displays:
+
+| Display rate | Frame period | Frames chosen | Actual       | Error    |
+|--------------|--------------|---------------|--------------|----------|
+| 60 Hz        | 16.67 ms     | 6             | 100.00 ms    | 0        |
+| 90 Hz        | 11.11 ms     | 9             | 100.00 ms    | 0        |
+| 120 Hz       | 8.33 ms      | 12            | 100.00 ms    | 0        |
+| 75 Hz        | 13.33 ms     | 8 (7.5 → 8)   | 106.67 ms    | +6.67 ms |
+| 144 Hz       | 6.94 ms      | 14 (14.4 → 14)| 97.22 ms     | −2.78 ms |
+
+Worst-case error on any common display is bounded by **±½ frame** of
+the actual refresh rate. At 60 Hz that's ±8.33 ms; at 144 Hz, ±3.47 ms.
+These errors are deterministic per display — they don't drift across
+trials — so within-subject comparisons stay unbiased even if absolute
+ms values differ slightly from what was authored.
+
+### What isn't controlled
+
+Frame-locked timing guarantees the *stimulus* onset/offset land on
+display frames. It does **not** control:
+
+- **Input timing.** Keyboard and touchscreen events land on the
+  browser's event loop, subject to OS / browser queuing. The engine
+  timestamps responses at the next frame — response-time resolution
+  is ~1 display frame, not sub-ms.
+- **Perceptual latency.** LCD pixel-response times (4–20 ms typical)
+  sit between the frame buffer flip and the photons reaching the eye.
+  The engine can't compensate for this; budget for it in your
+  paradigm design.
+- **Audio.** Web Audio latency varies wildly across browsers and
+  devices (~20–150 ms). Don't anchor critical timing to audio onsets
+  without offline calibration.
+- **Dropped frames.** The engine logs every drop to
+  `timing_quality.dropped_frames_total` in the payload. Filter trials
+  with drops in analysis if your paradigm is timing-sensitive.
+
+### Engine invariants worth knowing
+
+- `FrameClock.frame_number` is the canonical time axis — every event
+  is logged as a frame number, not a wall-clock time. Analysis
+  reconstructs real time by multiplying by `frame_period_us`.
+- Page-visibility pauses (tab hide) freeze the event queue via
+  `PageVisibility`; resumed trials pick up where they left off
+  without inflating reported RTs.
+- `min_refresh_hz` on the task metadata rejects displays below that
+  threshold at startup — use it when your paradigm genuinely breaks
+  on a 30 Hz / 50 Hz display.
+
+See `cog-task-engine/docs/FRD_Draft.md §6` for the engine's full
+timing spec.
+
+---
+
 ## Worked example: 2AFC with per-condition pools
 
 Goal: participants decide whether a symbol matches the **left** or
@@ -348,9 +446,9 @@ src/
   actions/             pure (task, ...args) → task mutators
                        + cascades.ts (8 rename cascades)
   components/
-    primitives/        Field, TextField, NumberField, Toggle, Select,
-                       KeyedList, MultiSelect, AssetRefPicker,
-                       CommaListField
+    primitives/        Field, TextField, NumberField, MsNumberField,
+                       Toggle, Select, KeyedList, MultiSelect,
+                       AssetRefPicker, CommaListField, CommitTextInput
     sections/          one panel per task-JSON section + Validation +
                        Help + TimelineView
     Shell, Toolbar, PasteImportDialog, ImportDropZone,

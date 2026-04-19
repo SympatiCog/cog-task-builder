@@ -1,5 +1,5 @@
 import { useTaskStore } from "../../store/taskStore";
-import { NumberField, Select, Toggle } from "../primitives";
+import { MsNumberField, Select, Toggle } from "../primitives";
 import { SectionHeader } from "./SectionHeader";
 import { setTiming } from "../../actions/blocks";
 import { useIssuesAt } from "../../validator/hooks";
@@ -36,31 +36,28 @@ export function TimingPanel() {
           error={modeError}
         />
         {timing.mode === "fixed_schedule" && (
-          <NumberField
+          <MsNumberField
             label="soa_ms"
             value={timing.soa_ms}
             onChange={(v) => update((t) => setTiming(t, { soa_ms: v }))}
             min={0}
-            step={100}
             required
             error={soaError}
             help="Stimulus-onset asynchrony: each trial starts at block_frame_0 + N × soa_ms."
           />
         )}
-        <NumberField
+        <MsNumberField
           label="iti_ms"
           value={timing.iti_ms}
           onChange={(v) => update((t) => setTiming(t, { iti_ms: v }))}
           min={0}
-          step={50}
           help="Mean inter-trial interval"
         />
-        <NumberField
+        <MsNumberField
           label="iti_jitter_ms"
           value={timing.iti_jitter_ms}
           onChange={(v) => update((t) => setTiming(t, { iti_jitter_ms: v }))}
           min={0}
-          step={50}
           help="Symmetric ± jitter around iti_ms"
         />
         <div className="md:col-span-2">

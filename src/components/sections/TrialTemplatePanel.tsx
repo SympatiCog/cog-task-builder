@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
-import { AssetRefPicker, NumberField, Select, TextField, Toggle } from "../primitives";
+import { AssetRefPicker, MsNumberField, NumberField, Select, TextField, Toggle } from "../primitives";
 import { CommitTextInput } from "../primitives/CommitTextInput";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
@@ -230,34 +230,30 @@ function TrialItemEditor(props: EditorProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <NumberField
+        <MsNumberField
           label="onset_ms"
           value={item.onset_ms}
           onChange={(v) => props.onChange({ onset_ms: v ?? 0 })}
           min={0}
-          step={50}
         />
-        <NumberField
+        <MsNumberField
           label="duration_ms"
           value={item.duration_ms}
           onChange={(v) => props.onChange({ duration_ms: v ?? 0 })}
           min={0}
-          step={50}
           help="0 = persists until trial end"
         />
-        <NumberField
+        <MsNumberField
           label="jitter_ms"
           value={item.jitter_ms}
           onChange={(v) => props.onChange({ jitter_ms: v })}
           min={0}
-          step={10}
         />
-        <NumberField
+        <MsNumberField
           label="response_window_ms"
           value={item.response_window_ms}
           onChange={(v) => props.onChange({ response_window_ms: v })}
           min={0}
-          step={100}
         />
       </div>
 

@@ -1,5 +1,5 @@
 import { useTaskStore } from "../../store/taskStore";
-import { MultiSelect, NumberField, Select, TextField, Toggle } from "../primitives";
+import { MsNumberField, MultiSelect, NumberField, Select, TextField, Toggle } from "../primitives";
 import { CommitTextInput } from "../primitives/CommitTextInput";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
@@ -211,14 +211,13 @@ function BlockEditor(props: BlockEditorProps) {
           })}
           help="Shown before the block starts. Space/Enter dismisses."
         />
-        <NumberField
+        <MsNumberField
           label="instructions.duration_ms"
           value={block.instructions?.duration_ms}
           onChange={(v) => props.onChange({
             instructions: block.instructions ? { ...block.instructions, duration_ms: v } : undefined,
           })}
           min={0}
-          step={500}
           help="0 = no timeout"
           disabled={!block.instructions?.text}
         />

@@ -4,6 +4,8 @@ export { TextField } from "./TextField";
 export type { TextFieldProps } from "./TextField";
 export { NumberField } from "./NumberField";
 export type { NumberFieldProps } from "./NumberField";
+export { MsNumberField } from "./MsNumberField";
+export type { MsNumberFieldProps } from "./MsNumberField";
 export { Toggle } from "./Toggle";
 export type { ToggleProps } from "./Toggle";
 export { Select } from "./Select";
