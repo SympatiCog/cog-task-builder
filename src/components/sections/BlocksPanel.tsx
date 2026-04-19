@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTaskStore } from "../../store/taskStore";
 import { MsNumberField, MultiSelect, NumberField, Select, TextField, Toggle } from "../primitives";
 import { CommitTextInput } from "../primitives/CommitTextInput";
@@ -29,24 +30,32 @@ export function BlocksPanel() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <SectionHeader
-        title="Blocks"
-        help="Ordered list of blocks. Each block draws trials from its declared types according to its ordering rule."
-      >
-        <button
-          type="button"
-          onClick={() => {
-            const base = "block_";
-            let i = 1;
-            const ids = new Set(task.blocks.map((b) => b.id));
-            while (ids.has(`${base}${i}`)) i++;
-            update((t) => addBlock(t, `${base}${i}`));
-          }}
-          className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+      {/*
+        Sticky header: as the blocks list grows, the help text + Add
+        button stay visible. Matches the TrialTemplate + StimulusTypes
+        pattern. Background matches <main>'s bg-slate-50 so cards don't
+        bleed through when scrolled.
+      */}
+      <div className="sticky top-0 z-20 bg-slate-50 pb-3">
+        <SectionHeader
+          title="Blocks"
+          help="Ordered list of blocks. Each block draws trials from its declared types according to its ordering rule."
         >
-          + Add block
-        </button>
-      </SectionHeader>
+          <button
+            type="button"
+            onClick={() => {
+              const base = "block_";
+              let i = 1;
+              const ids = new Set(task.blocks.map((b) => b.id));
+              while (ids.has(`${base}${i}`)) i++;
+              update((t) => addBlock(t, `${base}${i}`));
+            }}
+            className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            + Add block
+          </button>
+        </SectionHeader>
+      </div>
 
       {task.blocks.length === 0 ? (
         <p className="rounded border border-slate-200 bg-white p-6 text-center text-sm text-slate-600">
@@ -101,9 +110,21 @@ function BlockEditor(props: BlockEditorProps) {
   const issues = useIssuesAt(`blocks[${index}]`);
   const unbalancedIssue = issues.find((i) => i.code === "unbalanced");
   const csvSourceIssue = issues.find((i) => i.code === "missing_csv_source");
+  const [collapsed, setCollapsed] = useState(false);
+  const bodyId = `block-${block.id}-body`;
   return (
     <li className="rounded border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${collapsed ? "" : "mb-3"}`}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? `Expand ${block.id}` : `Collapse ${block.id}`}
+          aria-expanded={!collapsed}
+          aria-controls={bodyId}
+          className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-white text-xs text-slate-600 hover:bg-slate-100"
+        >
+          <span aria-hidden="true">{collapsed ? "▶" : "▼"}</span>
+        </button>
         <CommitTextInput
           value={block.id}
           onCommit={props.onRename}
@@ -137,7 +158,8 @@ function BlockEditor(props: BlockEditorProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {!collapsed && (<>
+      <div id={bodyId} className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <NumberField
           label="n_trials"
           value={block.n_trials}
@@ -228,6 +250,7 @@ function BlockEditor(props: BlockEditorProps) {
           help="When off, trial_template feedback items are skipped"
         />
       </div>
+      </>)}
     </li>
   );
 }
