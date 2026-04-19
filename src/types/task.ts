@@ -36,8 +36,12 @@ export type ImageAsset =
 
 export type AudioAsset = ImageAsset;
 
+// Schema 1.1 reserves `"audio"` syntactically but the engine rejects it with
+// `unsupported_pool_kind`. We model only the accepted kind so UI pickers stay
+// honest. Imported tasks carrying `kind: "audio"` keep the value on disk and
+// surface as a validator error.
 export interface Pool {
-  kind: "image" | "audio";
+  kind: "image";
   members: string[];
   share_across_types?: boolean;
 }
