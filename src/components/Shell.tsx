@@ -10,6 +10,7 @@ import { AssetsPanel } from "./sections/AssetsPanel";
 import { InputsPanel } from "./sections/InputsPanel";
 import { ResponsesPanel } from "./sections/ResponsesPanel";
 import { StimulusTypesPanel } from "./sections/StimulusTypesPanel";
+import { TrialTemplatePanel } from "./sections/TrialTemplatePanel";
 import { ValidationPanel } from "./sections/ValidationPanel";
 import { EmptyStub } from "./sections/EmptyStub";
 
@@ -98,7 +99,7 @@ function SectionBody({ active }: { active: Section }) {
     case "inputs":         return <InputsPanel />;
     case "responses":      return <ResponsesPanel />;
     case "stimulus_types": return <StimulusTypesPanel />;
-    case "trial_template": return <EmptyStub label="Trial template" batch={5} />;
+    case "trial_template": return <TrialTemplatePanel />;
     case "timing":         return <EmptyStub label="Timing"         batch={6} />;
     case "blocks":         return <EmptyStub label="Blocks"         batch={6} />;
     case "session_end":    return <EmptyStub label="Session end"    batch={6} />;
