@@ -15,6 +15,10 @@ import { TimingPanel } from "./sections/TimingPanel";
 import { BlocksPanel } from "./sections/BlocksPanel";
 import { SessionEndPanel } from "./sections/SessionEndPanel";
 import { ValidationPanel } from "./sections/ValidationPanel";
+import { HelpPanel } from "./sections/HelpPanel";
+import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { validate } from "../validator";
+import { exportTask } from "../serde/export";
 
 type Section =
   | "metadata"
@@ -27,26 +31,63 @@ type Section =
   | "timing"
   | "blocks"
   | "session_end"
-  | "validation";
+  | "validation"
+  | "help";
 
-const SECTIONS: ReadonlyArray<{ id: Section; label: string; batch: number }> = [
-  { id: "metadata",        label: "Metadata",       batch: 2 },
-  { id: "theme",           label: "Theme",          batch: 2 },
-  { id: "assets",          label: "Assets",         batch: 2 },
-  { id: "inputs",          label: "Inputs",         batch: 3 },
-  { id: "responses",       label: "Responses",      batch: 3 },
-  { id: "stimulus_types",  label: "Stimulus types", batch: 3 },
-  { id: "trial_template",  label: "Trial template", batch: 5 },
-  { id: "timing",          label: "Timing",         batch: 6 },
-  { id: "blocks",          label: "Blocks",         batch: 6 },
-  { id: "session_end",     label: "Session end",    batch: 6 },
-  { id: "validation",      label: "Validation",     batch: 3 },
+const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
+  { id: "metadata",        label: "Metadata"       },
+  { id: "theme",           label: "Theme"          },
+  { id: "assets",          label: "Assets"         },
+  { id: "inputs",          label: "Inputs"         },
+  { id: "responses",       label: "Responses"      },
+  { id: "stimulus_types",  label: "Stimulus types" },
+  { id: "trial_template",  label: "Trial template" },
+  { id: "timing",          label: "Timing"         },
+  { id: "blocks",          label: "Blocks"         },
+  { id: "session_end",     label: "Session end"    },
+  { id: "validation",      label: "Validation"     },
+  { id: "help",            label: "Help"           },
 ];
 
 export function Shell() {
   const task = useTaskStore((s) => s.task);
   const [active, setActive] = useState<Section>("metadata");
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Global shortcuts. Mod+E exports (with validator gate replicated here so
+  // the gate lives in one place), Mod+/ jumps to validation, Mod+I is a hint
+  // toward paste-import (fires the same window opener as the Toolbar button).
+  useKeyboardShortcuts([
+    {
+      combo: "mod+e",
+      description: "Export JSON",
+      handler: () => {
+        if (!task) return;
+        const report = validate(task);
+        if (report.errors.length > 0) {
+          const ok = window.confirm(
+            `Validator reports ${report.errors.length} error(s). The engine will refuse this task. Export anyway?`,
+          );
+          if (!ok) return;
+        }
+        const json = exportTask(task);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${task.metadata?.task_id ?? "task"}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      },
+    },
+    {
+      combo: "mod+/",
+      description: "Jump to Validation",
+      handler: () => setActive("validation"),
+    },
+  ]);
 
   if (!task) {
     return (
@@ -62,9 +103,15 @@ export function Shell() {
 
   return (
     <div className="flex h-full flex-col bg-slate-50 text-slate-900">
+      <a
+        href="#main-panel"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:shadow"
+      >
+        Skip to main panel
+      </a>
       <Toolbar onTogglePreview={() => setPreviewOpen((v) => !v)} previewOpen={previewOpen} />
       <div className="flex flex-1 overflow-hidden">
-        <nav className="flex w-48 flex-col gap-0.5 border-r border-slate-200 bg-white p-2">
+        <nav aria-label="Sections" className="flex w-48 flex-col gap-0.5 border-r border-slate-200 bg-white p-2">
           {SECTIONS.map((s) => (
             <button
               key={s.id}
@@ -79,7 +126,7 @@ export function Shell() {
             </button>
           ))}
         </nav>
-        <main className="flex-1 overflow-auto p-6">
+        <main id="main-panel" tabIndex={-1} className="flex-1 overflow-auto p-6">
           <ValidationBanner onOpen={() => setActive("validation")} />
           <SectionBody active={active} />
         </main>
@@ -106,6 +153,7 @@ function SectionBody({ active }: { active: Section }) {
     case "blocks":         return <BlocksPanel />;
     case "session_end":    return <SessionEndPanel />;
     case "validation":     return <ValidationPanel />;
+    case "help":           return <HelpPanel />;
   }
 }
 

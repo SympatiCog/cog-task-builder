@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTaskStore } from "../store/taskStore";
 import { importTask } from "../serde/import";
 
@@ -10,6 +10,14 @@ export function PasteImportDialog({ onClose }: Props) {
   const loadTask = useTaskStore((s) => s.loadTask);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleImport = () => {
     const result = importTask(text);
