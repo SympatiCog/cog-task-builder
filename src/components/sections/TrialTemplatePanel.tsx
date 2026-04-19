@@ -30,6 +30,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { TimelineView } from "./TimelineView";
+import { computeOverridesByField, typesOverridingItem } from "../../utils/overrides";
 
 const KIND_OPTIONS: ReadonlyArray<{ value: ItemKind; label: string }> = [
   { value: "text", label: "text" },
@@ -117,6 +118,8 @@ export function TrialTemplatePanel() {
                       audioIds={audioIds}
                       poolNames={poolNames}
                       styleNames={styleNames}
+                      overrides={computeOverridesByField(item, task.stimulus_types)}
+                      overridingTypes={typesOverridingItem(item, task.stimulus_types)}
                       onChange={(patch) => update((t) => updateTrialItem(t, index, patch))}
                       onRenameId={(newId) => {
                         if (newId === item.id || !newId) return;
@@ -170,6 +173,8 @@ interface EditorProps {
   audioIds: string[];
   poolNames: string[];
   styleNames: string[];
+  overrides: Record<string, string[]>;
+  overridingTypes: string[];
   onChange: (patch: Partial<TrialItem>) => void;
   onRenameId: (newId: string) => void;
   onDelete: () => void;
@@ -207,6 +212,14 @@ function TrialItemEditor(props: EditorProps) {
           aria-label="Item id"
           className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
         />
+        {props.overridingTypes.length > 0 && (
+          <span
+            className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800"
+            title={`Stimulus types overriding this item: ${props.overridingTypes.join(", ")}`}
+          >
+            Overridden by {props.overridingTypes.length} type{props.overridingTypes.length === 1 ? "" : "s"}
+          </span>
+        )}
         <Select
           label="kind"
           value={item.kind}
@@ -284,49 +297,58 @@ function TrialItemEditor(props: EditorProps) {
       </div>
 
       {item.kind !== "feedback" && item.kind !== "blank" && (
-        <AssetRefPicker
-          label="asset"
-          value={typeof item.asset === "string" ? item.asset : ""}
-          onChange={(v) => props.onChange({ asset: v || undefined })}
-          images={props.imageIds}
-          audio={props.audioIds}
-          pools={item.kind === "audio" ? [] : props.poolNames}
-          help={
-            item.kind === "text"
-              ? "txt:<literal> — the literal renders as text"
-              : item.kind === "image"
-              ? "img:<id> or img:pool:<name>"
-              : "aud:<id>"
-          }
-        />
+        <div>
+          <AssetRefPicker
+            label="asset"
+            value={typeof item.asset === "string" ? item.asset : ""}
+            onChange={(v) => props.onChange({ asset: v || undefined })}
+            images={props.imageIds}
+            audio={props.audioIds}
+            pools={item.kind === "audio" ? [] : props.poolNames}
+            help={
+              item.kind === "text"
+                ? "txt:<literal> — the literal renders as text"
+                : item.kind === "image"
+                ? "img:<id> or img:pool:<name>"
+                : "aud:<id>"
+            }
+          />
+          <OverrideHint types={props.overrides.asset} field="asset" />
+        </div>
       )}
 
       {(item.kind === "text" || item.kind === "image") && (
         <div className="grid grid-cols-2 gap-3">
-          <TextField
-            label="extras.style"
-            value={typeof item.extras?.style === "string" ? item.extras.style : ""}
-            onChange={(v) => {
-              const { style: _ignore, ...rest } = item.extras ?? {};
-              const nextExtras = v ? { ...rest, style: v } : rest;
-              props.onChange({ extras: Object.keys(nextExtras).length > 0 ? nextExtras : undefined });
-            }}
-            help={props.styleNames.length > 0 ? `Known: ${props.styleNames.join(", ")}` : "No styles declared"}
-          />
-          {item.kind === "image" && (
-            <NumberField
-              label="extras.size_pct"
-              value={typeof item.extras?.size_pct === "number" ? item.extras.size_pct : undefined}
+          <div>
+            <TextField
+              label="extras.style"
+              value={typeof item.extras?.style === "string" ? item.extras.style : ""}
               onChange={(v) => {
-                const { size_pct: _ignore, ...rest } = item.extras ?? {};
-                const nextExtras = v !== undefined ? { ...rest, size_pct: v } : rest;
+                const { style: _ignore, ...rest } = item.extras ?? {};
+                const nextExtras = v ? { ...rest, style: v } : rest;
                 props.onChange({ extras: Object.keys(nextExtras).length > 0 ? nextExtras : undefined });
               }}
-              min={0}
-              max={1}
-              step={0.05}
-              help="Width as fraction of viewport (e.g. 0.35)"
+              help={props.styleNames.length > 0 ? `Known: ${props.styleNames.join(", ")}` : "No styles declared"}
             />
+            <OverrideHint types={props.overrides["extras.style"]} field="extras.style" />
+          </div>
+          {item.kind === "image" && (
+            <div>
+              <NumberField
+                label="extras.size_pct"
+                value={typeof item.extras?.size_pct === "number" ? item.extras.size_pct : undefined}
+                onChange={(v) => {
+                  const { size_pct: _ignore, ...rest } = item.extras ?? {};
+                  const nextExtras = v !== undefined ? { ...rest, size_pct: v } : rest;
+                  props.onChange({ extras: Object.keys(nextExtras).length > 0 ? nextExtras : undefined });
+                }}
+                min={0}
+                max={1}
+                step={0.05}
+                help="Width as fraction of viewport (e.g. 0.35)"
+              />
+              <OverrideHint types={props.overrides["extras.size_pct"]} field="extras.size_pct" />
+            </div>
           )}
         </div>
       )}
@@ -337,10 +359,29 @@ function TrialItemEditor(props: EditorProps) {
           styleNames={props.styleNames}
           imageIds={props.imageIds}
           audioIds={props.audioIds}
+          overrides={props.overrides}
           onChange={props.onChange}
         />
       )}
     </div>
+  );
+}
+
+// Per-field hint that lists the stimulus types overriding this specific
+// field on the parent item. Rendered under the form field itself so the
+// author knows the base value will be replaced at runtime and by whom.
+function OverrideHint({ types, field }: { types: string[] | undefined; field: string }) {
+  if (!types || types.length === 0) return null;
+  const MAX = 4;
+  const visible = types.slice(0, MAX);
+  const hidden = types.length - visible.length;
+  return (
+    <p className="mt-1 text-xs text-blue-700">
+      Overridden in {types.length} stimulus type{types.length === 1 ? "" : "s"} via{" "}
+      <code className="font-mono">{field}</code>:{" "}
+      <span className="font-mono">{visible.join(", ")}</span>
+      {hidden > 0 && <span>{" "}and {hidden} more</span>}
+    </p>
   );
 }
 
@@ -386,10 +427,11 @@ interface FeedbackCasesEditorProps {
   styleNames: string[];
   imageIds: string[];
   audioIds: string[];
+  overrides: Record<string, string[]>;
   onChange: (patch: Partial<TrialItem>) => void;
 }
 
-function FeedbackCasesEditor({ item, styleNames, imageIds, audioIds, onChange }: FeedbackCasesEditorProps) {
+function FeedbackCasesEditor({ item, styleNames, imageIds, audioIds, overrides, onChange }: FeedbackCasesEditorProps) {
   const cases = item.cases ?? {};
   const outcomes = ["correct", "incorrect", "timeout"] as const;
 
@@ -404,27 +446,30 @@ function FeedbackCasesEditor({ item, styleNames, imageIds, audioIds, onChange }:
         {outcomes.map((o) => {
           const c = cases[o] ?? {};
           return (
-            <div key={o} className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <TextField
-                label={`${o}.text`}
-                value={c.text ?? ""}
-                onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, text: v || undefined } } })}
-              />
-              <TextField
-                label={`${o}.style`}
-                value={c.style ?? ""}
-                onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, style: v || undefined } } })}
-                help={styleNames.length > 0 ? `Known: ${styleNames.join(", ")}` : undefined}
-              />
-              <AssetRefPicker
-                label={`${o}.asset`}
-                value={c.asset ?? ""}
-                onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, asset: v || undefined } } })}
-                images={imageIds}
-                audio={audioIds}
-                pools={[]}
-                help="Pool refs not supported inside cases"
-              />
+            <div key={o} className="flex flex-col gap-1">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <TextField
+                  label={`${o}.text`}
+                  value={c.text ?? ""}
+                  onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, text: v || undefined } } })}
+                />
+                <TextField
+                  label={`${o}.style`}
+                  value={c.style ?? ""}
+                  onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, style: v || undefined } } })}
+                  help={styleNames.length > 0 ? `Known: ${styleNames.join(", ")}` : undefined}
+                />
+                <AssetRefPicker
+                  label={`${o}.asset`}
+                  value={c.asset ?? ""}
+                  onChange={(v) => onChange({ cases: { ...cases, [o]: { ...c, asset: v || undefined } } })}
+                  images={imageIds}
+                  audio={audioIds}
+                  pools={[]}
+                  help="Pool refs not supported inside cases"
+                />
+              </div>
+              <OverrideHint types={overrides[`cases.${o}`]} field={`cases.${o}`} />
             </div>
           );
         })}
