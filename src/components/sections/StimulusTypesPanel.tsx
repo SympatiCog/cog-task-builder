@@ -23,24 +23,40 @@ export function StimulusTypesPanel() {
   const audioIds = Object.keys(task.assets.audio ?? {});
   const poolNames = Object.keys(task.assets.pools ?? {});
 
+  const handleAdd = () => {
+    const base = "type_";
+    let i = 1;
+    while (`${base}${i}` in task.stimulus_types) i++;
+    update((t) => addStimulusType(t, `${base}${i}`));
+  };
+
   return (
     <div className="mx-auto max-w-3xl">
-      <SectionHeader
-        title="Stimulus types"
-        help="Each type declares a correct_response plus per-item overrides on the trial_template. Factorial conditions become N types (e.g., congruent_left, incongruent_right)."
-      />
+      {/*
+        Sticky header: as the types list grows, the help text and Add button
+        stay visible. Matching the TrialTemplatePanel pattern. Background
+        matches <main>'s bg-slate-50 so rows don't bleed through the
+        sticky layer when scrolled.
+      */}
+      <div className="sticky top-0 z-20 bg-slate-50 pb-3">
+        <SectionHeader
+          title="Stimulus types"
+          help="Each type declares a correct_response plus per-item overrides on the trial_template. Factorial conditions become N types (e.g., congruent_left, incongruent_right)."
+        >
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="rounded bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          >
+            + Add type
+          </button>
+        </SectionHeader>
+      </div>
       <KeyedList
         label="Types"
-        addLabel="+ Add type"
+        collapsible
         entries={Object.entries(task.stimulus_types)}
-        onAdd={() => {
-          const base = "type_";
-          let i = 1;
-          while (`${base}${i}` in task.stimulus_types) i++;
-          update((t) => addStimulusType(t, `${base}${i}`));
-        }}
         onRename={(oldId, newId) => {
-          if (newId === oldId || newId.length === 0) return;
           if (newId in task.stimulus_types) return;
           update((t) => renameStimulusType(t, oldId, newId));
         }}
