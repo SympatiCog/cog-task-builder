@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "task_id": "pvt_3min_v1",
+    "task_version": "1.0.0",
+    "name": "3-minute Psychomotor Vigilance Task (PVT)",
+    "author": "Cog Task Engine — adapted from Benderoth et al. (2021)",
+    "notes": "Reproduces the 3-min PVT as described in Benderoth, Hoermann, Schiessl & Elmenhorst (2021), 'Reliability and validity of a 3-min psychomotor vigilance task in assessing sensitivity to sleep loss and alcohol', SLEEP 44(11), doi:10.1093/sleep/zsab151. Original spec: green LED on a handheld device, ISI random 1-5 s, single button response, RT displayed for 1 s post-response, 3-min total. Engine adaptations: (1) RT timestamps are frame-quantized (~16.7 ms at 60 Hz) rather than the hardware sub-ms — well below the paper's reported sleep-loss/alcohol effect sizes (50-200 ms). (2) The engine has no template substitution in feedback text, so post-response feedback is a static 'Responded' message instead of the numeric RT. The precise per-trial RT remains in the payload's trial.response_rt_us field. (3) The paper's lapse threshold (>=355 ms) and false-start threshold (<=130 ms) are NOT enforced at the engine level — both filters are downstream-analyst responsibility against the captured RT. (4) The paper's session is time-bounded (180 s); the engine is trial-bounded, so n_trials=42 produces approximately 3 min at the configured timing (mean ISI 3 s + mean RT ~0.3-0.4 s + 1 s feedback ~ 4.4 s/trial x 42 ~ 184 s). (5) Pre-stimulus presses during ITI are silently dropped by the engine instead of being recorded as 'false starts' — a minor divergence from the original.",
+    "target_devices": ["desktop", "tablet", "phone"],
+    "min_refresh_hz": 55,
+    "log_frames": false,
+    "theme": {
+      "background_color": "#000000",
+      "default_text_color": "#ffffff",
+      "default_text_size_pct": 0.05,
+      "text_styles": {
+        "go":         { "font_size_pct": 0.30, "color": "#33ff33" },
+        "responded":  { "font_size_pct": 0.06, "color": "#999999" },
+        "slow":       { "font_size_pct": 0.07, "color": "#ffcc00" }
+      }
+    }
+  },
+  "assets": {
+    "images": {},
+    "audio": {}
+  },
+  "inputs": {
+    "keyboard": ["space"],
+    "touchscreen_buttons": [
+      { "id": "btn_tap", "label": "TAP", "position": "bottom_center", "size_px": 400 }
+    ]
+  },
+  "responses": {
+    "respond": { "keyboard": ["space"], "touchscreen": ["btn_tap"] }
+  },
+  "stimulus_types": {
+    "go": {
+      "correct_response": "respond",
+      "items": {
+        "cs": { "asset": "txt:\u25CF", "extras": { "style": "go" } }
+      }
+    }
+  },
+  "trial_template": [
+    {
+      "id": "cs",
+      "kind": "text",
+      "onset_ms": 0,
+      "wait_for_response": true,
+      "response_window_ms": 3000,
+      "captures_response": true
+    },
+    {
+      "id": "fb",
+      "kind": "feedback",
+      "anchor": "cs.end",
+      "onset_ms": 0,
+      "duration_ms": 1000,
+      "cases": {
+        "correct":   { "text": "Responded", "style": "responded" },
+        "incorrect": { "text": "Responded", "style": "responded" },
+        "timeout":   { "text": "Too slow",  "style": "slow" }
+      }
+    }
+  ],
+  "timing": {
+    "mode": "self_paced",
+    "iti_ms": 3000,
+    "iti_jitter_ms": 2000,
+    "allow_overlap": false
+  },
+  "blocks": [
+    {
+      "id": "main",
+      "n_trials": 42,
+      "types": ["go"],
+      "ordering": "fixed",
+      "instructions": {
+        "text": "Watch for the GREEN DOT.\n\nWhen you see it, press SPACE (or tap TAP) as fast as you can.\n\nDo NOT press before the dot appears.\n\nThe task takes about 3 minutes."
+      },
+      "feedback_enabled": true
+    }
+  ],
+  "session_end": {
+    "text": "Done. Thanks!"
+  }
+}

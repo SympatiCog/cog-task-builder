@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.1.0",
+  "metadata": {
+    "task_id": "pool_faces_2x2_v1",
+    "task_version": "1.0.0",
+    "name": "Face 2×2 (gender × emotion) — pool sampling demo",
+    "author": "Cog Task Engine",
+    "notes": "Placeholder face PNGs ship in res://assets/faces/. Real studies should overwrite each file in place (m_h_01.png, m_s_01.png, f_h_01.png, f_s_01.png, ...) with stimuli from a published face set (FACES, NimStim, KDEF). The .import sidecars regenerate on next editor open or `godot --import`.",
+    "target_devices": ["desktop", "tablet", "phone"],
+    "min_refresh_hz": 55,
+    "log_frames": false,
+    "theme": {
+      "background_color": "#101014",
+      "default_text_color": "#ffffff",
+      "default_text_size_pct": 0.07,
+      "text_styles": {
+        "fix":       {"font_size_pct": 0.10, "color": "#cccccc"},
+        "correct":   {"font_size_pct": 0.06, "color": "#33ff33"},
+        "incorrect": {"font_size_pct": 0.06, "color": "#ff4444"},
+        "slow":      {"font_size_pct": 0.06, "color": "#ffcc00"}
+      }
+    }
+  },
+  "assets": {
+    "images": {
+      "m_h_01": {"source": "bundled", "path": "res://assets/faces/m_h_01.png"},
+      "m_h_02": {"source": "bundled", "path": "res://assets/faces/m_h_02.png"},
+      "m_h_03": {"source": "bundled", "path": "res://assets/faces/m_h_03.png"},
+      "m_h_04": {"source": "bundled", "path": "res://assets/faces/m_h_04.png"},
+      "m_s_01": {"source": "bundled", "path": "res://assets/faces/m_s_01.png"},
+      "m_s_02": {"source": "bundled", "path": "res://assets/faces/m_s_02.png"},
+      "m_s_03": {"source": "bundled", "path": "res://assets/faces/m_s_03.png"},
+      "m_s_04": {"source": "bundled", "path": "res://assets/faces/m_s_04.png"},
+      "f_h_01": {"source": "bundled", "path": "res://assets/faces/f_h_01.png"},
+      "f_h_02": {"source": "bundled", "path": "res://assets/faces/f_h_02.png"},
+      "f_h_03": {"source": "bundled", "path": "res://assets/faces/f_h_03.png"},
+      "f_h_04": {"source": "bundled", "path": "res://assets/faces/f_h_04.png"},
+      "f_s_01": {"source": "bundled", "path": "res://assets/faces/f_s_01.png"},
+      "f_s_02": {"source": "bundled", "path": "res://assets/faces/f_s_02.png"},
+      "f_s_03": {"source": "bundled", "path": "res://assets/faces/f_s_03.png"},
+      "f_s_04": {"source": "bundled", "path": "res://assets/faces/f_s_04.png"}
+    },
+    "pools": {
+      "male_happy":   {"kind": "image", "members": ["m_h_01", "m_h_02", "m_h_03", "m_h_04"]},
+      "male_sad":     {"kind": "image", "members": ["m_s_01", "m_s_02", "m_s_03", "m_s_04"]},
+      "female_happy": {"kind": "image", "members": ["f_h_01", "f_h_02", "f_h_03", "f_h_04"]},
+      "female_sad":   {"kind": "image", "members": ["f_s_01", "f_s_02", "f_s_03", "f_s_04"]}
+    }
+  },
+  "inputs": {
+    "keyboard": ["f", "j"],
+    "touchscreen_buttons": [
+      {"id": "btn_happy", "label": "Happy", "position": "bottom_left",  "size_px": 180},
+      {"id": "btn_sad",   "label": "Sad",   "position": "bottom_right", "size_px": 180}
+    ]
+  },
+  "responses": {
+    "happy": {"keyboard": ["f"], "touchscreen": ["btn_happy"]},
+    "sad":   {"keyboard": ["j"], "touchscreen": ["btn_sad"]}
+  },
+  "stimulus_types": {
+    "male_happy":   {"correct_response": "happy", "items": {"cs": {"asset": "img:pool:male_happy"}}},
+    "male_sad":     {"correct_response": "sad",   "items": {"cs": {"asset": "img:pool:male_sad"}}},
+    "female_happy": {"correct_response": "happy", "items": {"cs": {"asset": "img:pool:female_happy"}}},
+    "female_sad":   {"correct_response": "sad",   "items": {"cs": {"asset": "img:pool:female_sad"}}}
+  },
+  "trial_template": [
+    {
+      "id": "fix",
+      "kind": "text",
+      "asset": "txt:+",
+      "onset_ms": 0,
+      "duration_ms": 500,
+      "extras": {"style": "fix"}
+    },
+    {
+      "id": "cs",
+      "kind": "image",
+      "onset_ms": 500,
+      "wait_for_response": true,
+      "response_window_ms": 2000,
+      "captures_response": true,
+      "extras": {"size_pct": 0.4}
+    },
+    {
+      "id": "fb",
+      "kind": "feedback",
+      "anchor": "cs.end",
+      "onset_ms": 100,
+      "duration_ms": 400,
+      "cases": {
+        "correct":   {"text": "Correct",   "style": "correct"},
+        "incorrect": {"text": "Incorrect", "style": "incorrect"},
+        "timeout":   {"text": "Too slow",  "style": "slow"}
+      }
+    }
+  ],
+  "timing": {
+    "mode": "self_paced",
+    "iti_ms": 1000,
+    "iti_jitter_ms": 150,
+    "allow_overlap": false
+  },
+  "blocks": [
+    {
+      "id": "practice",
+      "n_trials": 8,
+      "types": ["male_happy", "male_sad", "female_happy", "female_sad"],
+      "ordering": "factorial_random",
+      "constraints": {"max_type_repeat": 2, "balanced": true},
+      "seed": 17,
+      "instructions": {
+        "text": "Decide if each face is HAPPY or SAD.\n\nF or ◀ = Happy\nJ or ▶ = Sad\n\nRespond as fast and accurately as you can."
+      },
+      "feedback_enabled": true
+    }
+  ],
+  "session_end": {
+    "text": "Done. Thanks!"
+  }
+}

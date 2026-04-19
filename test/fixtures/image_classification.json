@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "task_id": "animacy_image_v1",
+    "task_version": "1.0.0",
+    "name": "Animacy Classification (living vs. non-living)",
+    "author": "Cog Task Engine",
+    "target_devices": ["desktop", "tablet", "phone"],
+    "min_refresh_hz": 55,
+    "log_frames": false,
+    "theme": {
+      "background_color": "#101014",
+      "default_text_color": "#ffffff",
+      "default_text_size_pct": 0.07,
+      "text_styles": {
+        "fix":       {"font_size_pct": 0.10, "color": "#cccccc"},
+        "correct":   {"font_size_pct": 0.06, "color": "#33ff33"},
+        "incorrect": {"font_size_pct": 0.06, "color": "#ff4444"},
+        "slow":      {"font_size_pct": 0.06, "color": "#ffcc00"}
+      }
+    }
+  },
+  "assets": {
+    "images": {
+      "dog":   {"source": "bundled", "path": "res://assets/images/dog.png"},
+      "bird":  {"source": "bundled", "path": "res://assets/images/bird.png"},
+      "car":   {"source": "bundled", "path": "res://assets/images/car.png"},
+      "chair": {"source": "bundled", "path": "res://assets/images/chair.png"}
+    }
+  },
+  "inputs": {
+    "keyboard": ["f", "j"],
+    "touchscreen_buttons": [
+      {"id": "btn_living",    "label": "Living",     "position": "bottom_left",  "size_px": 180},
+      {"id": "btn_nonliving", "label": "Non-living", "position": "bottom_right", "size_px": 180}
+    ]
+  },
+  "responses": {
+    "living":     {"keyboard": ["f"], "touchscreen": ["btn_living"]},
+    "non_living": {"keyboard": ["j"], "touchscreen": ["btn_nonliving"]}
+  },
+  "stimulus_types": {
+    "dog":   {"correct_response": "living",     "items": {"cs": {"asset": "img:dog"}}},
+    "bird":  {"correct_response": "living",     "items": {"cs": {"asset": "img:bird"}}},
+    "car":   {"correct_response": "non_living", "items": {"cs": {"asset": "img:car"}}},
+    "chair": {"correct_response": "non_living", "items": {"cs": {"asset": "img:chair"}}}
+  },
+  "trial_template": [
+    {
+      "id": "fix",
+      "kind": "text",
+      "asset": "txt:+",
+      "onset_ms": 0,
+      "duration_ms": 500,
+      "extras": {"style": "fix"}
+    },
+    {
+      "id": "cs",
+      "kind": "image",
+      "onset_ms": 500,
+      "wait_for_response": true,
+      "response_window_ms": 2000,
+      "captures_response": true,
+      "extras": {"size_pct": 0.35}
+    },
+    {
+      "id": "fb",
+      "kind": "feedback",
+      "anchor": "cs.end",
+      "onset_ms": 100,
+      "duration_ms": 400,
+      "cases": {
+        "correct":   {"text": "Correct",   "style": "correct"},
+        "incorrect": {"text": "Incorrect", "style": "incorrect"},
+        "timeout":   {"text": "Too slow",  "style": "slow"}
+      }
+    }
+  ],
+  "timing": {
+    "mode": "self_paced",
+    "iti_ms": 1000,
+    "iti_jitter_ms": 150,
+    "allow_overlap": false
+  },
+  "blocks": [
+    {
+      "id": "practice",
+      "n_trials": 8,
+      "types": ["dog", "bird", "car", "chair"],
+      "ordering": "factorial_random",
+      "constraints": {"max_type_repeat": 2, "balanced": true},
+      "seed": 17,
+      "instructions": {
+        "text": "Practice round.\n\nYou'll see a picture.\nPress F or tap ◀ if it's LIVING.\nPress J or tap ▶ if it's NON-LIVING.\n\nRespond as fast and accurately as you can."
+      },
+      "feedback_enabled": true
+    },
+    {
+      "id": "main",
+      "n_trials": 40,
+      "types": ["dog", "bird", "car", "chair"],
+      "ordering": "factorial_random",
+      "constraints": {"max_type_repeat": 3, "balanced": true},
+      "instructions": {
+        "text": "Main block.\n\nSame rules: LIVING = F / ◀,  NON-LIVING = J / ▶.\n\nNo feedback this round."
+      },
+      "feedback_enabled": false
+    }
+  ],
+  "session_end": {
+    "text": "You're done. Thanks!"
+  }
+}

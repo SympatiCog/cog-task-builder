@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "task_id": "flanker_text_v1",
+    "task_version": "1.0.0",
+    "name": "Eriksen Flanker (text)",
+    "author": "Cog Task Engine",
+    "target_devices": ["desktop", "tablet", "phone"],
+    "min_refresh_hz": 55,
+    "log_frames": false,
+    "theme": {
+      "background_color": "#000000",
+      "default_text_color": "#ffffff",
+      "default_text_size_pct": 0.08,
+      "text_styles": {
+        "stim":      {"font_size_pct": 0.14, "color": "#ffffff"},
+        "fix":       {"font_size_pct": 0.10, "color": "#cccccc"},
+        "correct":   {"font_size_pct": 0.06, "color": "#33ff33"},
+        "incorrect": {"font_size_pct": 0.06, "color": "#ff4444"},
+        "slow":      {"font_size_pct": 0.06, "color": "#ffcc00"}
+      }
+    }
+  },
+  "assets": {
+    "images": {},
+    "audio": {}
+  },
+  "inputs": {
+    "keyboard": ["f", "j"],
+    "touchscreen_buttons": [
+      {"id": "btn_left",  "label": "◀", "position": "bottom_left",  "size_px": 140},
+      {"id": "btn_right", "label": "▶", "position": "bottom_right", "size_px": 140}
+    ]
+  },
+  "responses": {
+    "left":  {"keyboard": ["f"], "touchscreen": ["btn_left"]},
+    "right": {"keyboard": ["j"], "touchscreen": ["btn_right"]}
+  },
+  "stimulus_types": {
+    "cong_left":    {"correct_response": "left",  "items": {"cs": {"asset": "txt:<<<<<"}}},
+    "cong_right":   {"correct_response": "right", "items": {"cs": {"asset": "txt:>>>>>"}}},
+    "incong_left":  {"correct_response": "left",  "items": {"cs": {"asset": "txt:>><>>"}}},
+    "incong_right": {"correct_response": "right", "items": {"cs": {"asset": "txt:<<><<"}}}
+  },
+  "trial_template": [
+    {
+      "id": "fix",
+      "kind": "text",
+      "asset": "txt:+",
+      "onset_ms": 0,
+      "duration_ms": 500,
+      "extras": {"style": "fix"}
+    },
+    {
+      "id": "cs",
+      "kind": "text",
+      "onset_ms": 500,
+      "wait_for_response": true,
+      "response_window_ms": 1500,
+      "captures_response": true,
+      "extras": {"style": "stim"}
+    },
+    {
+      "id": "fb",
+      "kind": "feedback",
+      "anchor": "cs.end",
+      "onset_ms": 100,
+      "duration_ms": 400,
+      "cases": {
+        "correct":   {"text": "Correct",   "style": "correct"},
+        "incorrect": {"text": "Incorrect", "style": "incorrect"},
+        "timeout":   {"text": "Too slow",  "style": "slow"}
+      }
+    }
+  ],
+  "timing": {
+    "mode": "self_paced",
+    "iti_ms": 800,
+    "iti_jitter_ms": 100,
+    "allow_overlap": false
+  },
+  "blocks": [
+    {
+      "id": "practice",
+      "n_trials": 12,
+      "types": ["cong_left", "cong_right", "incong_left", "incong_right"],
+      "ordering": "factorial_random",
+      "constraints": {"max_type_repeat": 3, "balanced": true},
+      "seed": 42,
+      "instructions": {
+        "text": "Practice round.\n\nRespond to the CENTER arrow only.\nPress F or tap ◀ for LEFT, J or tap ▶ for RIGHT.\n\nRespond as fast as you can."
+      },
+      "feedback_enabled": true
+    },
+    {
+      "id": "main",
+      "n_trials": 48,
+      "types": ["cong_left", "cong_right", "incong_left", "incong_right"],
+      "ordering": "factorial_random",
+      "constraints": {"max_type_repeat": 3, "balanced": true},
+      "instructions": {
+        "text": "Main block.\n\nKeep responding to the CENTER arrow.\n\nNo feedback this round."
+      },
+      "feedback_enabled": false
+    }
+  ],
+  "session_end": {
+    "text": "You're done. Thanks!"
+  }
+}
