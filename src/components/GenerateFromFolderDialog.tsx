@@ -3,6 +3,7 @@ import { useTaskStore } from "../store/taskStore";
 import { applyFolderToPool, type PreparedEntry } from "../actions/poolFolder";
 import { slugifyUnique } from "../utils/slugify";
 import { sha256File } from "../utils/sha256";
+import { guessMimeFromName, scanGitHubRawFolder, type GitHubScanProgress } from "../utils/githubFolder";
 import { Select, TextField, Toggle } from "./primitives";
 
 interface Props {
@@ -13,7 +14,8 @@ interface Props {
 type Source = "bundled" | "remote";
 
 // Extended File type — webkitdirectory inputs populate webkitRelativePath on
-// each File but TS's lib.dom marks it as optional. We guard at read time.
+// each File but TS's lib.dom marks it as optional. We guard at read time and
+// use Object.defineProperty when wrapping remote-scan blobs into File objects.
 interface FileWithPath extends File {
   webkitRelativePath: string;
 }
@@ -22,28 +24,33 @@ interface PreparedRow {
   file: FileWithPath;
   id: string;
   collision: boolean;
-  finalPath: string;   // res:// path (bundled) or URL (remote)
+  finalPath: string;
   sha256?: string;
-  hashError?: string;
 }
 
-// Generate images + pool members from a picked folder. Works for both
-// bundled (res:// paths) and remote (https:// URLs + SHA-256 hashed locally)
-// modes. The author picks a folder, the dialog shows a preview table, and
-// on Apply the pure poolFolder action commits the changes to the task.
 export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
   const task = useTaskStore((s) => s.task);
   const update = useTaskStore((s) => s.updateTask);
 
   const fileInput = useRef<HTMLInputElement | null>(null);
+
   const [source, setSource] = useState<Source>("bundled");
   const [pathPrefix, setPathPrefix] = useState("res://assets/");
   const [urlPrefix, setUrlPrefix] = useState("https://");
   const [stripTopLevel, setStripTopLevel] = useState(true);
+
   const [files, setFiles] = useState<FileWithPath[]>([]);
   const [hashes, setHashes] = useState<Record<string, string>>({});
   const [hashProgress, setHashProgress] = useState<{ done: number; total: number } | null>(null);
   const [hashError, setHashError] = useState<string | null>(null);
+
+  // GitHub-scan state. Uses a ref to signal the auto-hash effect to skip
+  // recomputing SHA-256 on files we already hashed during scan download.
+  const [scanUrl, setScanUrl] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanProgress, setScanProgress] = useState<GitHubScanProgress | null>(null);
+  const prehashedRef = useRef(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -51,13 +58,20 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Whenever the file list or source mode changes, reset hashing state.
-  // Remote mode triggers a background hash pass; bundled mode skips it.
+  // Auto-hash pass for locally-picked files in remote mode. GitHub-scanned
+  // files are pre-hashed and skip this path via prehashedRef.
   useEffect(() => {
     if (files.length === 0 || source !== "remote") {
-      setHashes({});
-      setHashProgress(null);
-      setHashError(null);
+      if (!prehashedRef.current) {
+        setHashes({});
+        setHashProgress(null);
+        setHashError(null);
+      }
+      return;
+    }
+    if (prehashedRef.current) {
+      prehashedRef.current = false;
+      setHashProgress({ done: files.length, total: files.length });
       return;
     }
     let cancelled = false;
@@ -93,20 +107,21 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
       const { id, taken } = slugifyUnique(f.name, used);
       const finalPath = source === "bundled" ? pathPrefix + rel : urlPrefix + rel;
       const sha = hashes[rawRel];
-      return {
-        file: f,
-        id,
-        collision: taken,
-        finalPath,
-        sha256: sha,
-      };
+      return { file: f, id, collision: taken, finalPath, sha256: sha };
     });
   }, [files, source, pathPrefix, urlPrefix, stripTopLevel, hashes, task]);
 
   const collisionCount = rows.filter((r) => r.collision).length;
   const remotePending = source === "remote" && hashProgress !== null && hashProgress.done < hashProgress.total;
-  const urlLooksValid = source === "bundled" || isValidHttpsPrefix(urlPrefix);
-  const canApply = rows.length > 0 && !remotePending && !hashError && urlLooksValid && (source === "bundled" || pathPrefix !== "");
+  const urlPrefixOk = source !== "remote" || isValidHttpsPrefix(urlPrefix);
+  const pathPrefixOk = source !== "bundled" || pathPrefix.startsWith("res://");
+  const canApply =
+    rows.length > 0 &&
+    !remotePending &&
+    !hashError &&
+    !scanning &&
+    urlPrefixOk &&
+    pathPrefixOk;
 
   const handlePickFiles = (picked: FileList | null) => {
     if (!picked) return;
@@ -120,7 +135,37 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
     list.sort((a, b) =>
       (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name),
     );
+    prehashedRef.current = false;
     setFiles(list);
+  };
+
+  const handleScan = async () => {
+    if (!scanUrl.trim() || scanning) return;
+    setScanError(null);
+    setScanning(true);
+    setScanProgress(null);
+    try {
+      const result = await scanGitHubRawFolder(scanUrl.trim(), setScanProgress);
+      const fs: FileWithPath[] = [];
+      const hs: Record<string, string> = {};
+      for (const sf of result.files) {
+        const f = new File([sf.blob], sf.name, { type: sf.blob.type || guessMimeFromName(sf.name) });
+        Object.defineProperty(f, "webkitRelativePath", { value: sf.name, configurable: true });
+        fs.push(f as FileWithPath);
+        hs[sf.name] = sf.sha256;
+      }
+      prehashedRef.current = true;
+      setSource("remote");
+      setUrlPrefix(result.urlPrefix);
+      setStripTopLevel(false);
+      setHashes(hs);
+      setFiles(fs);
+    } catch (e) {
+      setScanError((e as Error).message);
+    } finally {
+      setScanning(false);
+      setScanProgress(null);
+    }
   };
 
   const handleApply = () => {
@@ -161,34 +206,87 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-          >
-            {files.length > 0 ? "Choose different folder" : "Choose folder"}
-          </button>
-          {files.length > 0 && (
-            <span className="text-sm text-slate-600">
-              {files.length} image{files.length === 1 ? "" : "s"} selected
-            </span>
+        {/* GitHub URL scan */}
+        <div className="rounded border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            From GitHub folder URL
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={scanUrl}
+                onChange={(e) => setScanUrl(e.target.value)}
+                placeholder="https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>/"
+                className="w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs"
+                disabled={scanning}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleScan()}
+              disabled={scanning || !scanUrl.trim()}
+              className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-40"
+            >
+              {scanning ? "Scanning..." : "Scan"}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
+            Fetches the folder via GitHub's contents API, downloads each image, and computes SHA-256 locally.
+            Anonymous access is rate-limited (~60/hr per IP).
+          </p>
+          {scanProgress && (
+            <div className="mt-2 text-xs text-blue-800">
+              {scanProgress.phase === "listing"
+                ? "Listing folder..."
+                : `Downloading ${scanProgress.done} / ${scanProgress.total}...`}
+            </div>
           )}
-          <input
-            ref={fileInput}
-            type="file"
-            // @ts-expect-error non-standard attributes honored by all major browsers
-            webkitdirectory="true"
-            directory="true"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handlePickFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
+          {scanError && (
+            <div role="alert" className="mt-2 rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-800">
+              {scanError}
+            </div>
+          )}
         </div>
 
+        {/* Local folder picker */}
+        <div className="rounded border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            From local folder
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              className="rounded bg-slate-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              {files.length > 0 ? "Choose different folder" : "Choose folder"}
+            </button>
+            {files.length > 0 && (
+              <span className="text-sm text-slate-600">
+                {files.length} image{files.length === 1 ? "" : "s"} loaded
+              </span>
+            )}
+            <input
+              ref={fileInput}
+              type="file"
+              // @ts-expect-error non-standard attributes honored by all major browsers
+              webkitdirectory="true"
+              directory="true"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                handlePickFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
+            Pick a folder on your disk. For remote mode, SHA-256 is computed from the local bytes — those bytes must match what the engine will eventually fetch from the CDN.
+          </p>
+        </div>
+
+        {/* Source + prefix settings */}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Select
             label="Source"
@@ -203,7 +301,7 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
             label="Strip top-level folder name from paths"
             checked={stripTopLevel}
             onChange={setStripTopLevel}
-            help="On by default — avoids prefixes like res://assets/faces/faces/…"
+            help="On by default for local folders; off when GitHub-scanned (relative path is already just the filename)."
           />
           {source === "bundled" ? (
             <div className="md:col-span-2">
@@ -212,7 +310,7 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
                 value={pathPrefix}
                 onChange={setPathPrefix}
                 help="Final path = prefix + (relative folder path). Must start with res://"
-                error={pathPrefix.startsWith("res://") ? undefined : "Expected res:// prefix"}
+                error={pathPrefixOk ? undefined : "Expected res:// prefix"}
               />
             </div>
           ) : (
@@ -221,8 +319,8 @@ export function GenerateFromFolderDialog({ poolName, onClose }: Props) {
                 label="URL prefix"
                 value={urlPrefix}
                 onChange={setUrlPrefix}
-                help="Final URL = prefix + (relative folder path). Host is auto-added to allowed_hosts on apply."
-                error={urlLooksValid ? undefined : "Expected https:// URL ending with /"}
+                help="Final URL = prefix + (relative folder path). Host auto-added to allowed_hosts on apply."
+                error={urlPrefixOk ? undefined : "Expected a complete https:// URL (include the host)"}
               />
             </div>
           )}
@@ -303,8 +401,8 @@ function stripFirstSegment(path: string): string {
 function isValidHttpsPrefix(v: string): boolean {
   if (!v.startsWith("https://")) return false;
   try {
-    new URL(v);
-    return true;
+    const u = new URL(v);
+    return !!u.host;
   } catch {
     return false;
   }
