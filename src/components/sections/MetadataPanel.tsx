@@ -1,5 +1,5 @@
 import { useTaskStore } from "../../store/taskStore";
-import { TextField, NumberField, Toggle } from "../primitives";
+import { CommaListField, TextField, NumberField, Toggle } from "../primitives";
 import { setMetadata } from "../../actions/metadata";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
@@ -65,22 +65,14 @@ export function MetadataPanel() {
           min={1}
           step={1}
         />
-        <TextField
-          label="Allowed refresh Hz (comma-separated)"
-          value={(m.allowed_refresh_hz ?? []).join(", ")}
+        <CommaListField
+          label="Allowed refresh Hz"
+          value={(m.allowed_refresh_hz ?? []).map(String)}
           onChange={(v) => {
-            const trimmed = v.trim();
-            if (trimmed === "") {
-              update((t) => setMetadata(t, "allowed_refresh_hz", undefined));
-              return;
-            }
-            const parsed = trimmed
-              .split(",")
-              .map((s) => Number(s.trim()))
-              .filter((n) => Number.isFinite(n) && n > 0);
-            update((t) => setMetadata(t, "allowed_refresh_hz", parsed));
+            const parsed = v.map((s) => Number(s)).filter((n) => Number.isFinite(n) && n > 0);
+            update((t) => setMetadata(t, "allowed_refresh_hz", parsed.length > 0 ? parsed : undefined));
           }}
-          help="Optional whitelist. If set, device must match exactly — otherwise the task refuses to run."
+          help="Optional whitelist. If set, the device must match exactly or the task refuses to run."
         />
         <TargetDevicesField
           value={m.target_devices ?? []}

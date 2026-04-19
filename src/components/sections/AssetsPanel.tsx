@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTaskStore } from "../../store/taskStore";
-import { KeyedList, Select, TextField, Toggle } from "../primitives";
+import { CommaListField, KeyedList, Select, TextField, Toggle } from "../primitives";
 import { SectionHeader } from "./SectionHeader";
 import { useIssuesAt } from "../../validator/hooks";
 import {
@@ -44,17 +44,11 @@ export function AssetsPanel() {
 
       {/* Allowed hosts */}
       <div className="mb-6">
-        <TextField
-          label="Allowed hosts (one per line or comma-separated)"
-          value={allowed_hosts.join(", ")}
-          onChange={(v) => {
-            const parsed = v
-              .split(/[\n,]/)
-              .map((s) => s.trim())
-              .filter((s) => s.length > 0);
-            update((t) => setAllowedHosts(t, parsed));
-          }}
-          help="Required if any asset has source: remote. Host match is exact (no wildcards, no subdomain collapsing)."
+        <CommaListField
+          label="Allowed hosts"
+          value={allowed_hosts}
+          onChange={(v) => update((t) => setAllowedHosts(t, v))}
+          help="Required if any asset has source: remote. Host match is exact — no wildcards, no subdomain collapsing."
           error={hostsNeeded ? "Remote assets declared but allowed_hosts is empty." : undefined}
         />
       </div>

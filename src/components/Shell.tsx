@@ -7,6 +7,9 @@ import { ValidationBanner } from "./ValidationBanner";
 import { MetadataPanel } from "./sections/MetadataPanel";
 import { ThemePanel } from "./sections/ThemePanel";
 import { AssetsPanel } from "./sections/AssetsPanel";
+import { InputsPanel } from "./sections/InputsPanel";
+import { ResponsesPanel } from "./sections/ResponsesPanel";
+import { StimulusTypesPanel } from "./sections/StimulusTypesPanel";
 import { ValidationPanel } from "./sections/ValidationPanel";
 import { EmptyStub } from "./sections/EmptyStub";
 
@@ -92,9 +95,9 @@ function SectionBody({ active }: { active: Section }) {
     case "metadata":       return <MetadataPanel />;
     case "theme":          return <ThemePanel />;
     case "assets":         return <AssetsPanel />;
-    case "inputs":         return <EmptyStub label="Inputs"         batch={3} />;
-    case "responses":      return <EmptyStub label="Responses"      batch={3} />;
-    case "stimulus_types": return <EmptyStub label="Stimulus types" batch={3} />;
+    case "inputs":         return <InputsPanel />;
+    case "responses":      return <ResponsesPanel />;
+    case "stimulus_types": return <StimulusTypesPanel />;
     case "trial_template": return <EmptyStub label="Trial template" batch={5} />;
     case "timing":         return <EmptyStub label="Timing"         batch={6} />;
     case "blocks":         return <EmptyStub label="Blocks"         batch={6} />;

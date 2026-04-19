@@ -227,3 +227,83 @@ export function renameTextStyle(task: TaskJson, oldName: string, newName: string
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+// --- Rename cascades introduced in Batch 3b: touchscreen buttons, response
+// labels, stimulus types. Each shares the same immutable rewrite pattern as
+// the asset/pool/style helpers above.
+
+export function renameTouchscreenButton(
+  task: TaskJson,
+  oldId: string,
+  newId: string,
+): TaskJson {
+  if (oldId === newId) return task;
+  const buttons = task.inputs.touchscreen_buttons ?? [];
+  if (!buttons.some((b) => b.id === oldId)) return task;
+  if (buttons.some((b) => b.id === newId)) {
+    throw new Error(`renameTouchscreenButton: target id "${newId}" already exists`);
+  }
+  const nextButtons = buttons.map((b) =>
+    b.id === oldId ? { ...b, id: newId } : b,
+  );
+  const nextResponses = mapRecord(task.responses, (binding) => {
+    if (!binding?.touchscreen) return binding;
+    return {
+      ...binding,
+      touchscreen: binding.touchscreen.map((t) => (t === oldId ? newId : t)),
+    };
+  });
+  return {
+    ...task,
+    inputs: { ...task.inputs, touchscreen_buttons: nextButtons },
+    responses: nextResponses ?? {},
+  };
+}
+
+export function renameResponse(
+  task: TaskJson,
+  oldLabel: string,
+  newLabel: string,
+): TaskJson {
+  if (oldLabel === newLabel) return task;
+  if (!(oldLabel in task.responses)) return task;
+  if (newLabel in task.responses) {
+    throw new Error(`renameResponse: target label "${newLabel}" already exists`);
+  }
+  const nextResponses: typeof task.responses = {};
+  for (const [k, v] of Object.entries(task.responses)) {
+    nextResponses[k === oldLabel ? newLabel : k] = v;
+  }
+
+  const nextTypes = mapRecord(task.stimulus_types, (t) => ({
+    ...t,
+    correct_response: t.correct_response === oldLabel ? newLabel : t.correct_response,
+  }));
+
+  return { ...task, responses: nextResponses, stimulus_types: nextTypes ?? {} };
+}
+
+export function renameStimulusType(
+  task: TaskJson,
+  oldId: string,
+  newId: string,
+): TaskJson {
+  if (oldId === newId) return task;
+  if (!(oldId in task.stimulus_types)) return task;
+  if (newId in task.stimulus_types) {
+    throw new Error(`renameStimulusType: target id "${newId}" already exists`);
+  }
+  const nextTypes: typeof task.stimulus_types = {};
+  for (const [k, v] of Object.entries(task.stimulus_types)) {
+    nextTypes[k === oldId ? newId : k] = v;
+  }
+  const nextBlocks = task.blocks.map((b) => ({
+    ...b,
+    types: b.types?.map((t) => (t === oldId ? newId : t)),
+    trial_list: b.trial_list?.map((e) => ({
+      ...e,
+      type: e.type === oldId ? newId : e.type,
+    })),
+  }));
+  return { ...task, stimulus_types: nextTypes, blocks: nextBlocks };
+}
