@@ -33,9 +33,8 @@ The builder is entirely local — no backend required for v1. Drafts are
 auto-saved to `localStorage` under `cog-task-builder:v1`.
 
 Optional: point the **Run server validation** button at a Godot-headless
-HTTP wrapper for authoritative validation (see
-[docs/FRD_Draft.md §5.2](vendor/engine/docs/FRD_Draft.md) for the full
-validator pass list):
+HTTP wrapper for authoritative validation (the full validator pass list
+is in the engine's `docs/FRD_Draft.md §5.2`):
 
 ```bash
 VITE_VALIDATOR_URL=http://localhost:8080/validate npm run dev
@@ -88,8 +87,8 @@ GitHub. Each session draws a subset.
 - **+ Add pool** → `slotA_left`.
 - Click **Generate from folder...**.
 - In the dialog, paste the raw GitHub URL into the "From GitHub folder
-  URL" field (see ["Getting a GitHub URL for your stimuli"](#getting-a-github-url-for-your-stimuli)
-  below if you haven't hosted yours yet):
+  URL" field (if you haven't hosted yours yet, see the
+  **Getting a GitHub URL for your stimuli** section below):
   ```
   https://raw.githubusercontent.com/<owner>/<repo>/<commit-sha>/symbols/slotA_left/
   ```
@@ -338,9 +337,9 @@ npm run build      # typecheck + vite build → dist/
 Stack: Vite 5 + React 18 + TypeScript strict + Tailwind 3 + Zustand 4 +
 Vitest 2 + `@dnd-kit/core`.
 
-Architecture, invariants, and extension recipes live in
-[`CLAUDE.md`](./CLAUDE.md) — read that before adding a new section
-panel, validator rule, or rename cascade.
+Architecture, invariants, and extension recipes live in `CLAUDE.md` —
+read that before adding a new section panel, validator rule, or rename
+cascade.
 
 ### Repo layout
 
@@ -444,7 +443,7 @@ carry it forward; see `CLAUDE.md`).
   [cog-task-engine](https://github.com/SympatiCog/cog-task-engine)
   first.
 
-See [`CLAUDE.md`](./CLAUDE.md) for the full extension guide.
+See `CLAUDE.md` for the full extension guide.
 
 ---
 
